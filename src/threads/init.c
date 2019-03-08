@@ -73,41 +73,67 @@ static void locate_block_device (enum block_type, const char *name);
 int main (void) NO_RETURN;
 
 /* Pintos main program. */
+/*  canhld note on main()
+    So far the bootloader is done, now the kernel start its main function
+    */
 int
 main (void)
 {
   char **argv;
 
   /* Clear BSS. */  
+  /* Memset the bbs region. bbs is fixed and pre-defined */
   bss_init ();
 
   /* Break command line into arguments and parse options. */
+  /* Parse arg */
   argv = read_command_line ();
   argv = parse_options (argv);
 
   /* Initialize ourselves as a thread so we can use locks,
      then enable console locking. */
+  /*  thread_init do the following job:
+      - init the tid_lock, which is the lock for sync
+      - init the ready_list, which is a list of ready (for execution) threads
+      - init the all_list, which is a list of all exist threads  */
   thread_init ();
+    /* console_init: may be not this time */
   console_init ();  
 
   /* Greet user. */
+  /* We see this message, right? */
   printf ("Pintos booting with %'"PRIu32" kB RAM...\n",
           init_ram_pages * PGSIZE / 1024);
 
   /* Initialize memory system. */
+  /* Not this time */
   palloc_init (user_page_limit);
   malloc_init ();
   paging_init ();
 
   /* Segmentation. */
+  /* USERPROG is not defined this time, ignore */
 #ifdef USERPROG
   tss_init ();
   gdt_init ();
 #endif
 
   /* Initialize interrupt handlers. */
+  /*  intr_init: init the interrupt, actually we don't need to care about it.
+      In short, we know that hardware can use interrupt to stop the current 
+      job on cpu and let cpu have some fun in somewhere. But if every hardware
+      have it own interrupt line then it's suck. Instead of that there will be an
+      interrupt controller which concat all interrup line from hardware to one single
+      vector, and notify the cpu. The cpu will check the value of interrupt vector and 
+      queries it in a special table to know where the interrupt come from and what to do
+      next. The intr_init actualy init this table (and some others register in the interrupt controller).
+       */
   intr_init ();
+  /*  timer_init init an actual programmable timer in 80x86 hardware. This timmer will
+      generate a 'tick' after a period of time and can be use as periodic timer interrupt
+      for scheduling */
   timer_init ();
+  /* init the keyboard and stdin, fun but later */
   kbd_init ();
   input_init ();
 #ifdef USERPROG
