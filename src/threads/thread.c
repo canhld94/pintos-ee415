@@ -24,6 +24,13 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+/* List of processes in THREAD_BLOCKED state, that is, processes
+   that are blocked. 
+   We can identicate the blocked thread by check its blocked time
+   but we dont want to control the blocked_time for all threads
+   for every ticks, it's costly*/
+static struct list blocked_list;
+
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
@@ -67,10 +74,10 @@ static struct thread *next_thread_to_run (void);
 static void init_thread (struct thread *, const char *name, int priority);
 static bool is_thread (struct thread *) UNUSED;
 static void *alloc_frame (struct thread *, size_t size);
-static void schedule (void);
+static void schedule();
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
-
+static void reduce_block_ticks();
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -92,16 +99,23 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init(&blocked_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
-  initial_thread->status = THREAD_RUNNING;
+  initial_thread->status = THREAD_RUNNING; // this is main and has already running
   initial_thread->tid = allocate_tid ();
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
    Also creates the idle thread. */
+/*  As the dfinition of sema, thread_start create the idle thread first and then wait 
+    untill the idle thread end
+    So, till now we have an inital thread first (main in init.c), then go to idle thread 
+    is the very first thread is add to ready queue. When Idle thread is done then main thread
+    can continue
+    */
 void
 thread_start (void) 
 {
@@ -111,6 +125,9 @@ thread_start (void)
   thread_create ("idle", PRI_MIN, idle, &idle_started);
 
   /* Start preemptive thread scheduling. */
+/*  Cannot find the implementaion till now , but we can assume that assume that everytime
+    we got a tick, cpu call the schedule.
+     */
   intr_enable ();
 
   /* Wait for the idle thread to initialize idle_thread. */
@@ -122,6 +139,8 @@ thread_start (void)
 void
 thread_tick (void) 
 {
+  /* TODO: reduce number of ticks in blocked list */
+  reduce_block_ticks();
   struct thread *t = thread_current ();
 
   /* Update statistics. */
@@ -210,6 +229,9 @@ thread_create (const char *name, int priority,
    This function must be called with interrupts turned off.  It
    is usually a better idea to use one of the synchronization
    primitives in synch.h. */
+/*  While a thread is running, it is already remove from ready list
+    therefore, when schedule is called, it will not be scheduled again
+    untill it is unblock (by a right person at a right time)*/
 void
 thread_block (void) 
 {
@@ -240,6 +262,21 @@ thread_unblock (struct thread *t)
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
+}
+
+/* Put current thread to sleep ticks timer tick */
+void
+thread_sleep(int64_t ticks){
+  if(ticks == 0) return;
+  else
+  // set blocked time to ticks
+  {
+    enum intr_level old_level = intr_disable();
+    thread_current()->blocked_ticks = ticks; /* tick time cout to 0 */
+    list_push_back(&blocked_list, &thread_current()->elem);
+    thread_block();
+    intr_set_level (old_level);
+  }
 }
 
 /* Returns the name of the running thread. */
@@ -463,6 +500,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  t->blocked_ticks = 0;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -582,3 +620,35 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+/* TODO: implement of reduce_blocked_ticks */
+static void
+reduce_block_ticks(){
+  if(list_empty(&blocked_list)) 
+  {
+    return;
+  }
+  else
+  {
+    /* travel the list and decrease blocked_ticks */
+    struct list_elem *cur; /* an list iterator */
+    struct thread *t;
+    for (cur = list_begin (&blocked_list); cur != list_end (&blocked_list);)
+     {  
+        t = list_entry(cur, struct thread, elem);  /* get the thread in list  */
+        t->blocked_ticks--;
+        if(t->blocked_ticks == 0) 
+        {
+          cur = list_remove(cur);
+          thread_unblock(t);
+        }
+        else 
+        {
+          cur = cur->next;
+        }
+     }
+     return;
+    /* code */
+  }
+  
+}

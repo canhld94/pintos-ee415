@@ -100,6 +100,7 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+    int64_t blocked_ticks;               /* Time of waiting  */
   };
 
 /* If false (default), use round-robin scheduler.
@@ -118,6 +119,7 @@ tid_t thread_create (const char *name, int priority, thread_func *, void *);
 
 void thread_block (void);
 void thread_unblock (struct thread *);
+void thread_sleep(int64_t ticks);
 
 struct thread *thread_current (void);
 tid_t thread_tid (void);

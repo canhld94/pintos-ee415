@@ -155,6 +155,10 @@ main (void)
 
   printf ("Boot complete.\n");
   
+/*  
+  Untill now, there are only 2 threads running: main, and idle (which was scheduled and
+  then block right after)
+   */
   /* Run actions specified on kernel command line. */
   run_actions (argv);
 
