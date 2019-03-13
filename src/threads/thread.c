@@ -78,6 +78,9 @@ static void schedule();
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 static void reduce_block_ticks();
+static bool thread_cmp( const struct list_elem *a,
+            const struct list_elem *b,
+            void * aux);
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -260,6 +263,7 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
+  list_sort(&ready_list, thread_cmp, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -344,8 +348,10 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
+  if (cur != idle_thread) {
     list_push_back (&ready_list, &cur->elem);
+    list_sort(&ready_list, thread_cmp, NULL);
+  }
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -651,4 +657,16 @@ reduce_block_ticks(){
     /* code */
   }
   
+}
+
+/* TODO: Implement list_less_fuct */
+static bool 
+thread_cmp( const struct list_elem *a,
+            const struct list_elem *b,
+            void * aux) 
+{
+    struct thread *t_a = list_entry(a, struct thread, elem);
+    struct thread *t_b = list_entry(b, struct thread, elem);
+    if(t_a->priority > t_b->priority) return true;
+    else return false;
 }
