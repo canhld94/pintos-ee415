@@ -220,9 +220,21 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
-  /* Add to run queue. */
-  thread_unblock (t);
-
+  /* if t have higher priority than current running threads, so we can
+  sure that t have higher priority than other thread in ready list 
+  so we can push it to the front of the list */
+  if(priority > thread_get_priority())
+  {
+    enum intr_level old_level = intr_disable();
+    list_push_front(&ready_list, &t->elem);
+    t->status = THREAD_READY;
+    thread_yield(); /* Intr is on after this function */
+  }
+  else
+  {
+      /* Add to run queue. */
+    thread_unblock (t);
+  }
   return tid;
 }
 
@@ -263,8 +275,8 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
+  /* re-sort the ready queue */
   list_sort(&ready_list, thread_cmp, NULL);
-  t->status = THREAD_READY;
   intr_set_level (old_level);
 }
 
@@ -349,7 +361,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) {
-    list_push_back (&ready_list, &cur->elem);
+    list_push_front (&ready_list, &cur->elem);
     list_sort(&ready_list, thread_cmp, NULL);
   }
   cur->status = THREAD_READY;
@@ -379,6 +391,11 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  struct thread *t = list_entry(list_begin(&ready_list), struct thread, elem);
+  if(new_priority < t->priority)
+  {
+    thread_yield();
+  }
 }
 
 /* Returns the current thread's priority. */
