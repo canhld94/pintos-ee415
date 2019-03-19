@@ -32,6 +32,10 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+bool sema_cmp( const struct list_elem *a,
+            const struct list_elem *b,
+            void * aux);
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -320,7 +324,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
 
   if (!list_empty (&cond->waiters)) 
   {
-    list_sort(&cond->waiters, thread_cmp, NULL);
+    list_sort(&cond->waiters, sema_cmp, NULL);
     sema_up (&list_entry (list_pop_front (&cond->waiters),
                           struct semaphore_elem, elem)->semaphore);
   }
@@ -341,3 +345,17 @@ cond_broadcast (struct condition *cond, struct lock *lock)
   while (!list_empty (&cond->waiters))
     cond_signal (cond, lock);
 }
+
+bool sema_cmp( const struct list_elem *a,
+            const struct list_elem *b,
+            void * aux)
+  {
+    struct semaphore_elem *s1, *s2;
+    struct thread *t1, *t2;
+    s1 = list_entry(a, struct semaphore_elem, elem);
+    s2 = list_entry(b, struct semaphore_elem, elem);
+    t1 = list_entry(list_back(&(&s1->semaphore)->waiters), struct thread, elem);
+    t2 = list_entry(list_back(&(&s2->semaphore)->waiters), struct thread, elem);
+    if(t1->priority > t2->priority) return true;
+    else return false;
+  }
