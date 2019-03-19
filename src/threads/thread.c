@@ -78,9 +78,6 @@ static void schedule();
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 static void reduce_block_ticks();
-static bool thread_cmp( const struct list_elem *a,
-            const struct list_elem *b,
-            void * aux);
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -219,22 +216,8 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
-
-  /* if t have higher priority than current running threads, so we can
-  sure that t have higher priority than other thread in ready list 
-  so we can push it to the front of the list */
-  if(priority > thread_get_priority())
-  {
-    enum intr_level old_level = intr_disable();
-    list_push_front(&ready_list, &t->elem);
-    t->status = THREAD_READY;
-    thread_yield(); /* Intr is on after this function */
-  }
-  else
-  {
-      /* Add to run queue. */
-    thread_unblock (t);
-  }
+    /* Add to run queue. */
+  thread_unblock (t);
   return tid;
 }
 
@@ -276,7 +259,14 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
   /* re-sort the ready queue */
-  list_sort(&ready_list, thread_cmp, NULL);
+  t->status = THREAD_READY;
+    /* if t have priority higher than current thread then run it imediately 
+      not the idle thread because the first context switching is complex
+      the idle thread is stupid but we want it to run*/
+  if(t->priority > thread_get_priority() && thread_current() != idle_thread)
+  {
+    thread_yield();
+  }
   intr_set_level (old_level);
 }
 
@@ -361,8 +351,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) {
-    list_push_front (&ready_list, &cur->elem);
-    list_sort(&ready_list, thread_cmp, NULL);
+    list_push_back (&ready_list, &cur->elem);
   }
   cur->status = THREAD_READY;
   schedule ();
@@ -554,7 +543,10 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else
+  {
+    list_sort(&ready_list, thread_cmp, NULL);
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -677,7 +669,7 @@ reduce_block_ticks(){
 }
 
 /* TODO: Implement list_less_fuct */
-static bool 
+bool 
 thread_cmp( const struct list_elem *a,
             const struct list_elem *b,
             void * aux) 
