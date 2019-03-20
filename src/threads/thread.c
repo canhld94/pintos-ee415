@@ -263,7 +263,7 @@ thread_unblock (struct thread *t)
     /* if t have priority higher than current thread then run it imediately 
       not the idle thread because the first context switching is complex
       the idle thread is stupid but we want it to run*/
-  if(t->priority > thread_get_priority() && thread_current() != idle_thread)
+  if(t->priority >= thread_get_priority() && thread_current() != idle_thread)
   {
     thread_yield();
   }
@@ -379,12 +379,18 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  struct thread *c = thread_current();
+  c->priority = new_priority;
+  c->non_donated_priority = new_priority;
+  if(!list_empty(&c->waiters) && new_priority < list_entry(list_front(&c->waiters), struct thread, wait_elem)->priority)
+  {
+    c->priority = list_entry(list_front(&c->waiters), struct thread, wait_elem)->priority;
+  } 
   struct thread *t = list_entry(list_begin(&ready_list), struct thread, elem);
-  if(new_priority < t->priority)
+  if(c->priority < t->priority)
   {
     thread_yield();
-  }
+  }  
 }
 
 /* Returns the current thread's priority. */
@@ -511,9 +517,11 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->non_donated_priority = priority;
   t->magic = THREAD_MAGIC;
   t->blocked_ticks = 0;
-
+  list_init(&t->waiters);
+  t->waitee = NULL;
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);

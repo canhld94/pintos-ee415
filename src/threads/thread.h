@@ -91,7 +91,7 @@ struct thread
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
-    struct list_elem elem;              /* List element. */
+    struct list_elem elem;              /* List element for ready threads list. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -101,6 +101,10 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
     int64_t blocked_ticks;               /* Time of waiting  */
+    int non_donated_priority;
+    struct list_elem wait_elem;            /* List elemen for waiting list */
+    struct list waiters;                  /* List of thread wating for this thread */   
+    struct thread *waitee;               /* Thread that this thread is waiting for*/
   };
 
 /* If false (default), use round-robin scheduler.

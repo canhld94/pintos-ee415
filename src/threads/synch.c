@@ -118,10 +118,22 @@ sema_up (struct semaphore *sema)
 
   old_level = intr_disable ();
   sema->value++;
-  if (!list_empty (&sema->waiters)) {
+  if (!list_empty (&sema->waiters)) 
+  {
+    if(!list_empty(&thread_current()->waiters)) /* Remove all in sema_waiters from current thread w8 list */
+    {
+      struct list_elem *e = list_head (&sema->waiters);
+      while ((e = list_next (e)) != list_end (&sema->waiters)) 
+        {
+          struct thread *p = list_entry(e, struct thread, elem);
+          list_remove(&p->wait_elem);
+          p->waitee = NULL;
+        }
+    }
     list_sort(&sema->waiters, thread_cmp, NULL);
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
+    struct thread *t = list_entry (list_pop_front (&sema->waiters),
+                                struct thread, elem);
+    thread_unblock(t);
   }
   intr_set_level (old_level);
 }
@@ -201,9 +213,42 @@ lock_acquire (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
-
+  struct thread *t = lock->holder;
+  if(t != NULL)
+  {
+    /* Add current thread to the waiter list of holder */
+    list_push_back(&t->waiters, &thread_current()->wait_elem);
+    list_sort(&t->waiters, thread_cmp, NULL);
+    thread_current()->waitee = t;
+    if (thread_current()->priority > t->priority) 
+    {
+      t->priority = thread_current()->priority;
+    }
+    struct thread * tmp = t->waitee;
+    int donated_priority = t->priority;
+    while(tmp != NULL)
+    {
+      if(donated_priority > tmp->priority)
+        tmp->priority = donated_priority;
+      else donated_priority = tmp->priority;
+      tmp = tmp->waitee; 
+    }
+  }
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
+  if(t != NULL) 
+  {
+    if(!list_empty(&t->waiters))
+    {
+      struct thread *p = list_entry(list_front(&t->waiters), struct thread, wait_elem);
+      if(t->non_donated_priority <= p->priority)
+      {
+        t->priority = p->priority;
+      }
+      else t->priority = t->non_donated_priority;
+    }
+    else t->priority = t->non_donated_priority;
+  }
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -237,7 +282,7 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
-  lock->holder = NULL;
+  lock->holder = NULL;  
   sema_up (&lock->semaphore);
 }
 
