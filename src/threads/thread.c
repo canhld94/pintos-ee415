@@ -170,28 +170,37 @@ thread_tick (void)
     if(thread_mlfqs)
       t->recent_cpu += (1 << FRACT_BITS);
   }
-  
+  /* Calculate system load and recent cpu */
   if(system_ticks % TIMER_FREQ == 0 && thread_mlfqs){
-      system_load = (59*system_load)/60 +  ((1 << FRACT_BITS)/60)*(list_size(&ready_list) + is_not_idle(t));
-      int recent_cpu_coe = (2*system_load*(1 << FRACT_BITS))/(2*system_load + (1 << FRACT_BITS));
+      system_load = (59 * system_load) / 60 +  
+                    ((1 << FRACT_BITS) / 60) * (list_size(&ready_list) + is_not_idle(t));
+      int recent_cpu_coe = (system_load << (FRACT_BITS + 1)) / ((system_load << 1) + (1 << FRACT_BITS));
       struct list_elem *e = list_head (&all_list);
       while ((e = list_next (e)) != list_end (&all_list)) 
         {
           struct thread *p = list_entry(e, struct thread, allelem);
-          p->recent_cpu = recent_cpu_coe * (p->recent_cpu >> FRACT_BITS) + (p->nicess << FRACT_BITS);
+          p->recent_cpu = recent_cpu_coe * (p->recent_cpu >> FRACT_BITS) 
+                        + (p->nicess << FRACT_BITS);
         }
-  }
-  if(system_ticks % TIME_SLICE == 0 && thread_mlfqs)
-  {
-      int new_priority = PRI_MAX - (t->recent_cpu >> (FRACT_BITS + 2)) - (t->nicess << 1);
-      if(new_priority > PRI_MAX) new_priority = PRI_MAX;
-      if(new_priority < PRI_MIN) new_priority = PRI_MIN;
-      t->priority = new_priority;
   }
 
   /* Enforce preemption. */
-  if (++thread_ticks >= TIME_SLICE){
+  if (++thread_ticks >= TIME_SLICE)
+  {
     intr_yield_on_return ();
+  /* if mlqfs calculate thread priority */
+    if(thread_mlfqs)
+    {
+      struct list_elem *e = list_head (&all_list);
+      while ((e = list_next (e)) != list_end (&all_list)) 
+        {
+          struct thread *p = list_entry(e, struct thread, allelem);
+          int new_priority = PRI_MAX - (p->recent_cpu >> (FRACT_BITS + 2)) - (p->nicess << 1);
+          if(new_priority > PRI_MAX) new_priority = PRI_MAX;
+          if(new_priority < PRI_MIN) new_priority = PRI_MIN;
+          p->priority = new_priority;
+        }
+    }
   }
 }
 /* Prints thread statistics. */
