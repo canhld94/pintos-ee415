@@ -20,7 +20,7 @@
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
-#define FRACT_BITS (15)
+#define FRACT_BITS (14)
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
@@ -171,7 +171,8 @@ thread_tick (void)
       t->recent_cpu += (1 << FRACT_BITS);
   }
   /* Calculate system load and recent cpu */
-  if(system_ticks % TIMER_FREQ == 0 && thread_mlfqs){
+  if(system_ticks % TIMER_FREQ == 0 && thread_mlfqs)
+  {
       system_load = (59 * system_load) / 60 +  
                     ((1 << FRACT_BITS) / 60) * (list_size(&ready_list) + is_not_idle(t));
       int recent_cpu_coe = (system_load << (FRACT_BITS + 1)) / ((system_load << 1) + (1 << FRACT_BITS));
@@ -183,12 +184,10 @@ thread_tick (void)
                         + (p->nicess << FRACT_BITS);
         }
   }
-
-  /* Enforce preemption. */
+  
   if (++thread_ticks >= TIME_SLICE)
   {
-    intr_yield_on_return ();
-  /* if mlqfs calculate thread priority */
+      /* if mlqfs calculate thread priority */
     if(thread_mlfqs)
     {
       struct list_elem *e = list_head (&all_list);
@@ -201,6 +200,8 @@ thread_tick (void)
           p->priority = new_priority;
         }
     }
+    /* Enforce preemption. */
+    intr_yield_on_return ();
   }
 }
 /* Prints thread statistics. */
@@ -431,7 +432,7 @@ thread_set_priority (int new_priority)
     c->priority = list_entry(list_front(&c->waiters), struct thread, wait_elem)->priority;
   } 
   struct thread *t = list_entry(list_begin(&ready_list), struct thread, elem);
-  if(c->priority <= t->priority)
+  if(c->priority < t->priority)
   {
     thread_yield();
   }  
