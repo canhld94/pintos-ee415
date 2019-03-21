@@ -178,12 +178,12 @@ thread_tick (void)
       while ((e = list_next (e)) != list_end (&all_list)) 
         {
           struct thread *p = list_entry(e, struct thread, allelem);
-          p->recent_cpu = recent_cpu_coe * (p->recent_cpu >> FRACT_BITS) + p->nicess*(1 << FRACT_BITS);
+          p->recent_cpu = recent_cpu_coe * (p->recent_cpu >> FRACT_BITS) + (p->nicess << FRACT_BITS);
         }
   }
   if(system_ticks % TIME_SLICE == 0 && thread_mlfqs)
   {
-      int new_priority = PRI_MAX - (t->recent_cpu >> (FRACT_BITS + 2)) - (t->nicess >> 1);
+      int new_priority = PRI_MAX - (t->recent_cpu >> (FRACT_BITS + 2)) - (t->nicess << 1);
       if(new_priority > PRI_MAX) new_priority = PRI_MAX;
       if(new_priority < PRI_MIN) new_priority = PRI_MIN;
       t->priority = new_priority;
@@ -444,7 +444,7 @@ thread_set_nice (int nice)
   if(nice > 20) nice = 20;
   if(nice < -20) nice = -20;
   c->nicess = nice;
-  int new_priority = PRI_MAX - (c->recent_cpu >> (FRACT_BITS + 2)) - (c->nicess >> 1);
+  int new_priority = PRI_MAX - (c->recent_cpu >> (FRACT_BITS + 2)) - (c->nicess << 1);
   /* Ajust priority */
   if(new_priority > PRI_MAX) new_priority = PRI_MAX;
   if(new_priority < PRI_MIN) new_priority = PRI_MIN;
@@ -579,7 +579,7 @@ init_thread (struct thread *t, const char *name, int priority)
   }
   else
   {
-    int mlfqs_priority = PRI_MAX - (t->recent_cpu >> (FRACT_BITS + 2)) - (t->nicess >> 1);
+    int mlfqs_priority = PRI_MAX - (t->recent_cpu >> (FRACT_BITS + 2)) - (t->nicess << 1);
     if(mlfqs_priority > PRI_MAX) mlfqs_priority = PRI_MAX;
     if(mlfqs_priority < PRI_MIN) mlfqs_priority = PRI_MIN;
     t->priority = mlfqs_priority;
