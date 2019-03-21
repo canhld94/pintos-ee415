@@ -105,6 +105,9 @@ struct thread
     struct list_elem wait_elem;            /* List elemen for waiting list */
     struct list waiters;                  /* List of thread wating for this thread */   
     struct thread *waitee;               /* Thread that this thread is waiting for*/
+
+    int nicess;
+    int recent_cpu;
   };
 
 /* If false (default), use round-robin scheduler.

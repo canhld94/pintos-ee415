@@ -130,9 +130,9 @@ sema_up (struct semaphore *sema)
           p->waitee = NULL;
         }
     }
-    list_sort(&sema->waiters, thread_cmp, NULL);
-    struct thread *t = list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem);
+    struct list_elem *m = list_max(&sema->waiters, thread_cmp, NULL);
+    list_remove(m);
+    struct thread *t = list_entry (m,struct thread, elem);
     thread_unblock(t);
   }
   intr_set_level (old_level);
@@ -218,7 +218,7 @@ lock_acquire (struct lock *lock)
   {
     /* Add current thread to the waiter list of holder */
     list_push_back(&t->waiters, &thread_current()->wait_elem);
-    list_sort(&t->waiters, thread_cmp, NULL);
+    // list_sort(&t->waiters, thread_cmp, NULL);
     thread_current()->waitee = t;
     if (thread_current()->priority > t->priority) 
     {
@@ -240,7 +240,8 @@ lock_acquire (struct lock *lock)
   {
     if(!list_empty(&t->waiters))
     {
-      struct thread *p = list_entry(list_front(&t->waiters), struct thread, wait_elem);
+      struct list_elem *e = list_max(&t->waiters, thread_cmp, NULL);
+      struct thread *p = list_entry(e, struct thread, wait_elem);
       if(t->non_donated_priority <= p->priority)
       {
         t->priority = p->priority;
@@ -369,9 +370,9 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
 
   if (!list_empty (&cond->waiters)) 
   {
-    list_sort(&cond->waiters, sema_cmp, NULL);
-    sema_up (&list_entry (list_pop_front (&cond->waiters),
-                          struct semaphore_elem, elem)->semaphore);
+    struct list_elem *e = list_max(&cond->waiters, sema_cmp, NULL);
+    list_remove(e);
+    sema_up (&list_entry (e,struct semaphore_elem, elem)->semaphore);
   }
 }
 
@@ -401,6 +402,6 @@ bool sema_cmp( const struct list_elem *a,
     s2 = list_entry(b, struct semaphore_elem, elem);
     t1 = list_entry(list_back(&(&s1->semaphore)->waiters), struct thread, elem);
     t2 = list_entry(list_back(&(&s2->semaphore)->waiters), struct thread, elem);
-    if(t1->priority > t2->priority) return true;
+    if(t1->priority < t2->priority) return true;
     else return false;
   }
