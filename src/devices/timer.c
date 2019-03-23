@@ -1,3 +1,8 @@
+/*  
+  Duc-Canh Le <canhld@kaist.ac.kr>
+  Network and Computing Laboratory
+*/
+
 #include "devices/timer.h"
 #include <debug.h>
 #include <inttypes.h>

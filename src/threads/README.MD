@@ -8,7 +8,7 @@
 
 ---- GROUP ----
 Duc-Canh Le <20184167> <canhld@kaist.ac.kr>
-Watermelon and Mun
+Many thanks to Watermelon and Mun
 
 ---- PRELIMINARIES ----
 
@@ -99,9 +99,9 @@ it will affect the system.
 
 Added to struct thread:
   /* Member for priority schedule */
-  int non_donated_priority;           /* Original priority */
+  int non_donated_priority;           /* Thread original priority */
   struct list_elem wait_elem;         /* List elemen for waiting list */
-  struct list waiters;                /* List of thread wating for this thread */  
+  struct list waiters;                /* List of threads wating for this thread */ 
   struct thread *waitee;              /* Thread that this thread is waiting for */
 
 
@@ -175,14 +175,13 @@ be called in many function (e.g. printf), so whenever printf is called
 then the thread priority is set to the origin unexpectedly. 
 
 
-
 ---- RATIONALE ----
 
 >> Critique your design, pointing out advantages and disadvantages in
 >> your design choices.
 
 > Advantage: 
-It's simple and straightfoward
+The implementation is simple and straightfoward
 
 We used list_max <O(N)>, which is much better than list_sort <O(NlogN)>,
 for select highest priority thread in a list
@@ -191,7 +190,9 @@ for select highest priority thread in a list
 It may lead to starvation when a low priority thread possibly be ignore
 for very long time.
 
-Sometime we need to travel the list <O(logN)>, this may be costly
+Sometime we need to travel the list <O(N)>, this may be costly. We are
+working with interrup disabled so we want to minimize the time as much as
+possible.
 
 It's not yet cover all the possible scenario that can happens in a real
 system. For example, when a thread release a lock, it will remove all
@@ -220,11 +221,14 @@ Added to thread.c:
 #define FRACT_BITS (14)
 /* System load, sfi31_17 */
 static int system_load;
+/* # of timer ticks in the system */
+static long long system_ticks; 
+
 
 ---- ALGORITHMS ----
 
 >> Briefly describe your implementation of advanced scheduling
-Both the policy and how to implement are well and clearly describe 
+Both the policy and how to implement mlfqs are well and clearly describe 
 in Pintos doccument and the lecture, we just need to follow it to finish
 this part. Here I just point out some critial in this impleentation:
 
@@ -234,8 +238,8 @@ look tricky, e.g. with system load:
 - Original formula:
 system_load = 59/60 * system_load + 1/60 * ready_threads
 - To fixed point:
-59/60 * system_load --> 59*(1 << FRACT_BITS)/60 * system_load *(1 >> FRACT_BITS)
-                    --> (59 * system_load) / 60
+59/60 * system_load  --> 59*(1 << FRACT_BITS)/60 * system_load *(1 >> FRACT_BITS)
+                     --> (59 * system_load) / 60
 1/60 * ready_threads --> (1 << FRACT_BITS)/60 * ready_threads
 The recent_cpu is similar.
  
@@ -262,7 +266,8 @@ want to build the whole fixed-point arthimetic just for few operations.
 Hopefuly, we don't need to use fixed-point in next projects.
 
 Updating recent cpu and priority is O(N), so I'm not sure that mlfqs is 
-suitabe in actual system.
+suitabe in actual system (with many threads).
 
 We need to do many things in the interrupt handle, if we don't do it carefully
-or there are to many threads I think the system may have some "unpredictable" behaviors due to missing timer ticks.
+or there are to many threads I think the system may have some "unpredictable" 
+behaviors due to missing timer ticks.

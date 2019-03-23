@@ -1,3 +1,8 @@
+/*  
+  Duc-Canh Le <canhld@kaist.ac.kr>
+  Network and Computing Laboratory
+*/
+
 #ifndef THREADS_SYNCH_H
 #define THREADS_SYNCH_H
 /* canhld git test */

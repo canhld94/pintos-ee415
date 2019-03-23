@@ -1,3 +1,8 @@
+/*  
+  Duc-Canh Le <canhld@kaist.ac.kr>
+  Network and Computing Laboratory
+*/
+
 #ifndef THREADS_THREAD_H
 #define THREADS_THREAD_H
 

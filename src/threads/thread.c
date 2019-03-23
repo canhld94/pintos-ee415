@@ -1,3 +1,8 @@
+/*  
+  Duc-Canh Le <canhld@kaist.ac.kr>
+  Network and Computing Laboratory
+*/
+
 #include "threads/thread.h"
 #include <debug.h>
 #include <stddef.h>
@@ -61,7 +66,7 @@ struct kernel_thread_frame
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
 static long long user_ticks;    /* # of timer ticks in user programs. */
-static long long system_ticks;
+static long long system_ticks;  /* # of timer ticks in the system */
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
@@ -308,7 +313,7 @@ thread_unblock (struct thread *t)
   t->status = THREAD_READY;
     /* if t have priority higher than current thread then run it imediately 
       not the idle thread because the first context switching is complex
-      the idle thread is stupid but we want it to run*/
+      the idle thread is stupid but we want it to run */
   if(t->priority >= thread_get_priority() && thread_current() != idle_thread)
   {
     thread_yield();
@@ -428,12 +433,14 @@ thread_set_priority (int new_priority)
   struct thread *c = thread_current();
   c->priority = new_priority;
   c->non_donated_priority = new_priority;
+  /* Make sure that new priority higer than donated priority */
   if(!list_empty(&c->waiters) && new_priority < list_entry(list_max(&c->waiters, thread_cmp, NULL), 
                                                 struct thread, wait_elem)->priority)
   {
     c->priority = list_entry(list_max(&c->waiters, thread_cmp, NULL), 
                   struct thread, wait_elem)->priority;
   } 
+  /* Yield if thread is no longer highest priority */
   struct thread *t = list_entry(list_begin(&ready_list), struct thread, elem);
   if(c->priority < t->priority)
   {
@@ -632,6 +639,7 @@ next_thread_to_run (void)
     return idle_thread;
   else
   {
+    /* Choose thread with highest priority */
     struct list_elem *e = list_max(&ready_list, thread_cmp, NULL);
     list_remove(e);
     return list_entry(e, struct thread, elem);

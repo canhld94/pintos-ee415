@@ -1,3 +1,8 @@
+/*  
+  Duc-Canh Le <canhld@kaist.ac.kr>
+  Network and Computing Laboratory
+*/
+
 /* This file is derived from source code for the Nachos
    instructional operating system.  The Nachos copyright notice
    is reproduced in full below. */
@@ -249,6 +254,7 @@ lock_acquire (struct lock *lock)
   {
     if(!list_empty(&t->waiters))
     {
+      /* Make sure thread have higher priority than its waiters */
       struct list_elem *e = list_max(&t->waiters, thread_cmp, NULL);
       struct thread *p = list_entry(e, struct thread, wait_elem);
       if(t->non_donated_priority <= p->priority)
