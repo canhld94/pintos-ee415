@@ -746,7 +746,12 @@ reduce_block_ticks(){
           cur = list_remove(cur);
           /* We dont want to use thread_unblock here */
           list_push_back (&ready_list, &t->elem);
-          t->status = THREAD_READY;        
+          t->status = THREAD_READY;     
+          /* If waked up thread have higest priority, yield on return */
+          if(t->priority > thread_current()->priority)
+          {
+            intr_yield_on_return();
+          }   
         }
         else 
         {
