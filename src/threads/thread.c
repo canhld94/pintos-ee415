@@ -46,6 +46,7 @@ static struct thread *initial_thread;
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
+/* System load */
 static int system_load;
 
 /* Stack frame for kernel_thread(). */
@@ -427,9 +428,11 @@ thread_set_priority (int new_priority)
   struct thread *c = thread_current();
   c->priority = new_priority;
   c->non_donated_priority = new_priority;
-  if(!list_empty(&c->waiters) && new_priority < list_entry(list_front(&c->waiters), struct thread, wait_elem)->priority)
+  if(!list_empty(&c->waiters) && new_priority < list_entry(list_max(&c->waiters, thread_cmp, NULL), 
+                                                struct thread, wait_elem)->priority)
   {
-    c->priority = list_entry(list_front(&c->waiters), struct thread, wait_elem)->priority;
+    c->priority = list_entry(list_max(&c->waiters, thread_cmp, NULL), 
+                  struct thread, wait_elem)->priority;
   } 
   struct thread *t = list_entry(list_begin(&ready_list), struct thread, elem);
   if(c->priority < t->priority)
@@ -458,7 +461,9 @@ thread_set_nice (int nice)
   /* Ajust priority */
   if(new_priority > PRI_MAX) new_priority = PRI_MAX;
   if(new_priority < PRI_MIN) new_priority = PRI_MIN;
+  enum intr_level old_level = intr_disable();
   thread_set_priority(new_priority);
+  intr_set_level(old_level);
 }
 
 /* Returns the current thread's nice value. */
@@ -571,6 +576,9 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->magic = THREAD_MAGIC;
+  list_init(&t->waiters);
+  t->waitee = NULL;
+  old_level = intr_disable ();
   t->blocked_ticks = 0;
   if(t == initial_thread) 
   {
@@ -595,9 +603,6 @@ init_thread (struct thread *t, const char *name, int priority)
     t->priority = mlfqs_priority;
     t->non_donated_priority = mlfqs_priority;
   }
-  list_init(&t->waiters);
-  t->waitee = NULL;
-  old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
 }

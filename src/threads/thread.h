@@ -100,14 +100,16 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
-    int64_t blocked_ticks;               /* Time of waiting  */
+    /* Member for alarm-clock */
+    int64_t blocked_ticks;              /* Time of waiting  */
+    /* Member for priority schedule */
     int non_donated_priority;
-    struct list_elem wait_elem;            /* List elemen for waiting list */
-    struct list waiters;                  /* List of thread wating for this thread */   
-    struct thread *waitee;               /* Thread that this thread is waiting for*/
-
-    int nicess;
-    int recent_cpu;
+    struct list_elem wait_elem;         /* List elemen for waiting list */
+    struct list waiters;                /* List of thread wating for this thread */   
+    struct thread *waitee;              /* Thread that this thread is waiting for*/
+    /* Member for advanced scheduler */
+    int nicess;                         /* Nice value */
+    int recent_cpu;                     /* Recent CPU */
   };
 
 /* If false (default), use round-robin scheduler.

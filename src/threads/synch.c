@@ -120,7 +120,9 @@ sema_up (struct semaphore *sema)
   sema->value++;
   if (!list_empty (&sema->waiters)) 
   {
-    if(!list_empty(&thread_current()->waiters)) /* Remove all in sema_waiters from current thread w8 list */
+    /* Is about to release lock */
+    /* Remove all in sema_waiters from current thread w8 list */
+    if(!list_empty(&thread_current()->waiters))
     {
       struct list_elem *e = list_head (&sema->waiters);
       while ((e = list_next (e)) != list_end (&sema->waiters)) 
@@ -130,6 +132,7 @@ sema_up (struct semaphore *sema)
           p->waitee = NULL;
         }
     }
+    /* Select the thread with highest priority to wake up */
     struct list_elem *m = list_max(&sema->waiters, thread_cmp, NULL);
     list_remove(m);
     struct thread *t = list_entry (m,struct thread, elem);
@@ -218,12 +221,14 @@ lock_acquire (struct lock *lock)
   {
     /* Add current thread to the waiter list of holder */
     list_push_back(&t->waiters, &thread_current()->wait_elem);
-    // list_sort(&t->waiters, thread_cmp, NULL);
+    /* Set current thread waitee to lock holder */
     thread_current()->waitee = t;
+    /* Donate priority */
     if (thread_current()->priority > t->priority) 
     {
       t->priority = thread_current()->priority;
     }
+    /* Donate priority to holder waitee if neccessary */
     struct thread * tmp = t->waitee;
     int donated_priority = t->priority;
     while(tmp != NULL)
@@ -235,7 +240,11 @@ lock_acquire (struct lock *lock)
     }
   }
   sema_down (&lock->semaphore);
+  /* Got the lock */
+  /* Current waitee is set to NULL and current thread is removed from
+     former holders when former holder call sema_up before */
   lock->holder = thread_current ();
+  /* Adjust former holder priority */
   if(t != NULL) 
   {
     if(!list_empty(&t->waiters))
@@ -370,6 +379,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
 
   if (!list_empty (&cond->waiters)) 
   {
+    /* Select the semaphore with highest priority in waiters */
     struct list_elem *e = list_max(&cond->waiters, sema_cmp, NULL);
     list_remove(e);
     sema_up (&list_entry (e,struct semaphore_elem, elem)->semaphore);
@@ -392,6 +402,7 @@ cond_broadcast (struct condition *cond, struct lock *lock)
     cond_signal (cond, lock);
 }
 
+/* TODO: Implement list_less_func for semaphore */
 bool sema_cmp( const struct list_elem *a,
             const struct list_elem *b,
             void * aux)
@@ -400,8 +411,10 @@ bool sema_cmp( const struct list_elem *a,
     struct thread *t1, *t2;
     s1 = list_entry(a, struct semaphore_elem, elem);
     s2 = list_entry(b, struct semaphore_elem, elem);
-    t1 = list_entry(list_back(&(&s1->semaphore)->waiters), struct thread, elem);
-    t2 = list_entry(list_back(&(&s2->semaphore)->waiters), struct thread, elem);
+    t1 = list_entry(list_max(&(&s1->semaphore)->waiters, thread_cmp, NULL), 
+                    struct thread, elem);
+    t2 = list_entry(list_max(&(&s2->semaphore)->waiters, thread_cmp, NULL), 
+                    struct thread, elem);
     if(t1->priority < t2->priority) return true;
     else return false;
   }
