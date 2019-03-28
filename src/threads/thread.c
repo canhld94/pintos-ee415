@@ -434,12 +434,15 @@ thread_set_priority (int new_priority)
   c->priority = new_priority;
   c->non_donated_priority = new_priority;
   /* Make sure that new priority higer than donated priority */
-  if(!list_empty(&c->waiters) && new_priority < list_entry(list_max(&c->waiters, thread_cmp, NULL), 
-                                                struct thread, wait_elem)->priority)
+  struct thread *m = list_entry(list_max(&c->waiters, thread_cmp, NULL),
+                               struct thread, wait_elem);
+  enum intr_level old_level = intr_disable();
+  if(!list_empty(&c->waiters) && new_priority < m->priority)
   {
-    c->priority = list_entry(list_max(&c->waiters, thread_cmp, NULL), 
-                  struct thread, wait_elem)->priority;
-  } 
+    c->priority = m->priority;
+  }
+  else c->priority = new_priority;
+  intr_set_level(old_level);
   /* Yield if thread is no longer highest priority */
   struct thread *t = list_entry(list_begin(&ready_list), struct thread, elem);
   if(c->priority < t->priority)
@@ -468,9 +471,7 @@ thread_set_nice (int nice)
   /* Ajust priority */
   if(new_priority > PRI_MAX) new_priority = PRI_MAX;
   if(new_priority < PRI_MIN) new_priority = PRI_MIN;
-  enum intr_level old_level = intr_disable();
   thread_set_priority(new_priority);
-  intr_set_level(old_level);
 }
 
 /* Returns the current thread's nice value. */

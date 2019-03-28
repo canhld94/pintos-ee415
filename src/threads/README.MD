@@ -224,7 +224,6 @@ static int system_load;
 /* # of timer ticks in the system */
 static long long system_ticks; 
 
-
 ---- ALGORITHMS ----
 
 >> Briefly describe your implementation of advanced scheduling
