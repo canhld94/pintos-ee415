@@ -10,8 +10,7 @@
 Duc-Canh Le <canhld@kaist.ac.kr>
 
 >> Fill in your GitLab repository address.
-
-https://gitlab.com/yourid/example
+https://gitlab.com/canhld94/pintos-ee415
 
 ---- PRELIMINARIES ----
 >> If you have any preliminary comments on your submission, notes for the
@@ -117,7 +116,7 @@ priority is logicaly the maximum priority in this list (including itself).
 
 Waitee is the pointer to thread that current thread are waiting (if there is)
 
-    Thread A0 --> A waitee (A1) --> A1 waitee (A2) --> ... --> NULL
+    thread A0 --> A waitee (A1) --> A1 waitee (A2) --> ... --> NULL
 
 
 ---- ALGORITHMS ----
@@ -259,13 +258,17 @@ Yes, sometime some threads have same priority. We just execute those threads
 in round robin manner. 
 It's match, because in thread_yield we push back current
 thread to back of ready list. And the list_max alway select the first maximum 
-prority thread from this list (because our list_less function have <, not <=).
+prority thread from this list (because our list_less function use <, not <=).
 
 >> C4: How is the way you divided the cost of scheduling between code
 >> inside and outside interrupt context likely to affect performance?
 
 Actually most of the code was implemented in thread_ticks, which is the interrupt
-handler, so we just try
+handler, so we just try to optimize the code in this function:
+   Using >> and << when its possible to replce * and / (not sure it's gonna good 
+   within current CPU technology).
+   Using list_max <O(N)> instead of list_short <at least O(NlogN)>
+It's just unavoidable to modify thread_ticks (that is, the algorithm).
 
 ---- RATIONALE ----
 
