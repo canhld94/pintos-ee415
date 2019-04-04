@@ -195,16 +195,18 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, char **argv, int argc);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
                           bool writable);
+static int userprog_parser(char *cmd, char **argv);
 
 /* Loads an ELF executable from FILE_NAME into the current thread.
    Stores the executable's entry point into *EIP
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
+
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
@@ -220,12 +222,22 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
-
+  /* TODO: Implement the parser here: seprate the file_name by 'blank space'
+     The file_name can contains some opitons, e.g. 'ls -l' we need to break
+     down the string into words and save to an array, e.g. 'ls', '-l' */
+  char *argv[MAX_ARGV_LEN];
+  char *cmd = palloc_get_page(0);
+  strlcpy(cmd, file_name, MAX_CMD_LEN);
+  int argc = userprog_parser(cmd, argv);
+  // int j  = 0;
+  // while(argv[i] != NULL){
+  //   printf("%s\n", argv[i++]);
+  // }
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (argv[0]);
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", file_name);
+      printf ("load: %s: open failed\n", argv[0]);
       goto done; 
     }
 
@@ -238,7 +250,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
       || ehdr.e_phnum > 1024) 
     {
-      printf ("load: %s: error loading executable\n", file_name);
+      printf ("load: %s: error loading executable\n", argv[0]);
       goto done; 
     }
 
@@ -302,7 +314,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, argv, argc))
     goto done;
 
   /* Start address. */
@@ -312,11 +324,28 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
+  palloc_free_page(cmd);
   file_close (file);
   return success;
 }
 
 /* load() helpers. */
+/* TODO: implement userprog_parser */
+static int 
+userprog_parser(char *cmd, char **argv)
+{
+  int cnt = 0; /* number of argv - 1, at least 0 */
+  char *token, *save_ptr;
+
+   for (token = strtok_r (cmd, " ", &save_ptr); token != NULL;
+        token = strtok_r (NULL, " ", &save_ptr))
+        {
+          argv[cnt] = token;
+          cnt++;
+        }
+  argv[cnt] = NULL;
+  return cnt;
+}
 
 static bool install_page (void *upage, void *kpage, bool writable);
 
@@ -426,8 +455,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
+/* TODO: Implement the parser */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, char **argv, int argc) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -437,7 +467,7 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE;
+        *esp = PHYS_BASE - 16;
       else
         palloc_free_page (kpage);
     }

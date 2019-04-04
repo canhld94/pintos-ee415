@@ -2,6 +2,10 @@
 #define USERPROG_PROCESS_H
 
 #include "threads/thread.h"
+/* Maximum command line length is 4KB */
+#define MAX_CMD_LEN 4096
+/* Maximum length of each argument is 128B */
+#define MAX_ARGV_LEN 128
 
 tid_t process_execute (const char *file_name);
 int process_wait (tid_t);
