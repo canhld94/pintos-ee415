@@ -334,7 +334,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 static int 
 userprog_parser(char *cmd, char **argv)
 {
-  int cnt = 0; /* number of argv - 1, at least 0 */
+  int cnt = 0; /* number of argv, at least 1 */
   char *token, *save_ptr;
 
    for (token = strtok_r (cmd, " ", &save_ptr); token != NULL;
@@ -455,7 +455,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
-/* TODO: Implement the parser */
+/* TODO: Correctly setup the stack, following the doccument */
 static bool
 setup_stack (void **esp, char **argv, int argc) 
 {
@@ -467,7 +467,37 @@ setup_stack (void **esp, char **argv, int argc)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE - 16;
+      {
+        /* Setup the stack by pushing the argv value to the top of stack */
+        uint8_t *virtual_esp = (uint8_t *) (PHYS_BASE); /* Virtual stack poiter */
+        uint32_t argv_addr[argc + 1]; /* Address of argv in the stack */
+        argv_addr[argc] = 0; /* The last argv should be NULL */
+        int i;
+        for(i = argc - 1; i >= 0; --i)
+        {
+          virtual_esp -= strlen(argv[i]) + 1; /* 1 for the NULL terminator */
+          argv_addr[i] = (int) virtual_esp;
+          strlcpy(virtual_esp, argv[i], MAX_ARGV_LEN); /* strlcpy alway returns the len of src */
+        }
+        /* Align the stack */
+        while(((int) virtual_esp % 4) != 0)
+        {
+          *virtual_esp = 0;
+          virtual_esp--;
+        }
+        /* Pushing the argv_addr to stack */
+        for(i = argc; i >=0; --i)
+        {
+          * (uint32_t *) virtual_esp = argv_addr[i];
+          virtual_esp -= 4;
+        }
+        /* Pushing argv itself to stack */
+        *(uint32_t *)virtual_esp = (int) (virtual_esp + 4);
+        virtual_esp -= 4;
+        /* Pushing a NULL as fake return address*/
+        *(uint32_t *)virtual_esp = 0;
+        *esp = virtual_esp;
+      }
       else
         palloc_free_page (kpage);
     }
