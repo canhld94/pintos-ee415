@@ -122,7 +122,7 @@ int
 process_wait (tid_t child_tid) 
 {
   /* travel the child list */
-  // printf("wait call\n");
+  // printf("%s calls wait\n",thread_name());
   struct list_elem *e = list_begin(&thread_current()->childs);
   struct thread *t = NULL;
   int return_status;
@@ -130,7 +130,7 @@ process_wait (tid_t child_tid)
   {
     struct thread *t0 = list_entry(e, struct thread, child_elem);
     if(t0->tid == child_tid){
-      // printf("found pid in my childs\n");
+      // printf("%s found pid in childs %s\n", thread_name(), t0->name);
       t = t0;
       break;
     }
@@ -145,16 +145,17 @@ process_wait (tid_t child_tid)
   {
     if(t->status != THREAD_ZOOMBIE)
     {
-      // printf("try get lock\n");
+      // printf("%s try get child lock of %s\n", thread_name(), t->name);
       lock_acquire(&t->internal_lock);
-      // printf("get lock\n");
+      // printf("%s get child lock of %s\n", thread_name(), t->name);
       t->zoombie_on_exit = 0;
+      // printf("%s release child parrent lock of %s\n", thread_name(), t->name);
       return_status = t->userprog_status;
-      lock_release(&t->internal_lock);
+      lock_release(&t->parrent_lock);
     } 
     else
     {
-      // printf("Child is already terminated\n");
+      // printf("%s child is already terminated %s\n", thread_name(), t->name);
       return_status = t->userprog_status;
       palloc_free_page(t);
     }

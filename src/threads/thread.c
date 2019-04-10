@@ -379,11 +379,11 @@ thread_exit (void)
   ASSERT(lock_held_by_current_thread(&thread_current()->internal_lock))
   process_exit ();
   // list_remove(&thread_current()->child_elem);
-  // printf("get my lock\n");
+  // printf("%s get my lock\n", thread_name());
   lock_release(&thread_current()->internal_lock); /* Release internal lock, if parrent want then accquire it */
-  // printf("release my lock\n");
-  lock_acquire(&thread_current()->internal_lock); /* Get my lock back again */
-  // printf("get my lock back again\n");
+  // printf("%s release my lock\n", thread_name());
+  lock_acquire(&thread_current()->parrent_lock); /* Get my lock back again */
+  // printf("%s get my parrent lock\n", thread_name());
 #endif
 
   /* Remove thread from all threads list, set our status to dying,
@@ -621,11 +621,13 @@ init_thread (struct thread *t, const char *name, int priority)
   #ifdef USERPROG
   t->zoombie_on_exit = 1; /* Default to become zoombie, if parrent wait then it will change to 0 */
   lock_init(&t->internal_lock);
+  lock_init(&t->parrent_lock);
   list_init(&t->childs);
   if(t != initial_thread)
   {
     t->parrent = thread_current();
     list_push_back(&thread_current()->childs, &t->child_elem);
+    lock_acquire(&t->parrent_lock);
   }
   #endif // USERPROG
   list_push_back (&all_list, &t->allelem);

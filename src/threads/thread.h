@@ -110,6 +110,7 @@ struct thread
     struct list_elem child_elem;        /* List element for child */
     struct file *ofile[NOFILE];
     struct lock internal_lock;          /* My own lock */
+    struct lock parrent_lock;           /* My parrent lock */
     int zoombie_on_exit;                /* Become zoombie on exit */
     int userprog_status;
 #endif
