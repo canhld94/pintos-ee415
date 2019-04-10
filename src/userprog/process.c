@@ -17,9 +17,19 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+
+struct execution
+{
+  /* data */
+  char fn_copy[1024]; /* Copy of the filename, assume that max = 1024 char */
+  struct lock ex_lock; /* Lock for the condvar */
+  struct condition ex_cond; /* ˛Condvar to notify the parrent that child load successfuly or not */
+  int load_status;
+};
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -28,29 +38,45 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
-  char *fn_copy;
+ struct execution *thread_args;
+  
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
+  thread_args = palloc_get_page (0);
+  lock_init(&thread_args->ex_lock);
+  cond_init(&thread_args->ex_cond);
+  if (thread_args->fn_copy == NULL || file_name == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
-
+  strlcpy (thread_args->fn_copy, file_name, 1024);
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+  /* But before that, accquire lock */
+  lock_acquire(&thread_args->ex_lock);
+  tid = thread_create (file_name, PRI_DEFAULT, start_process, thread_args);
+  if(tid == TID_ERROR)
+  {
+    lock_release(&thread_args->ex_lock); /* it's ok? */
+    palloc_free_page (thread_args); 
+    return tid;
+  }
+  cond_wait(&thread_args->ex_cond, &thread_args->ex_lock);  /* Wait for the condition */
+  lock_release(&thread_args->ex_lock);
+  if (thread_args->load_status == false)
+    tid = -1;
+  palloc_free_page (thread_args); 
   return tid;
 }
 
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_process (void *thread_args_)
 {
-  char *file_name = file_name_;
+  /* Otherwise, run, accquire my own lock first */
+  lock_acquire(&thread_current()->internal_lock);
+  struct execution *thread_args = thread_args_;
+  char *file_name = thread_args->fn_copy;
   struct intr_frame if_;
   bool success;
 
@@ -60,12 +86,19 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
-
-  /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success) 
+  // if_.esp_dummy = (uint32_t) if_.esp;
+  // printf("0x%x\n", if_.esp_dummy);
+  /* Now we know that the exec is success or not, so signal the parrent */
+  /* If load failed, quit. --> parrent will free args, relax */
+  thread_args->load_status = success;
+  lock_acquire(&thread_args->ex_lock);
+  cond_signal(&thread_args->ex_cond, &thread_args->ex_lock);
+  lock_release(&thread_args->ex_lock);
+  if (!success){
+    // list_remove(&thread_current()->child_elem); /* We cannot do it in thread_exit */
     thread_exit ();
-
+  }
+  // printf("ready to run userprog\n");
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -86,8 +119,48 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
+  /* travel the child list */
+  // printf("wait call\n");
+  struct list_elem *e = list_begin(&thread_current()->childs);
+  struct thread *t = NULL;
+  int return_status;
+  while(e != NULL) /* looking for child_tid in child list */
+  {
+    struct thread *t0 = list_entry(e, struct thread, child_elem);
+    if(t0->tid == child_tid){
+      // printf("found pid in my childs\n");
+      t = t0;
+      break;
+    }
+    e = e->next;
+  }
+  if(t == NULL) /* child_pid is invalid */
+  {
+    // printf("No valid pid found\n");
+    return_status = -1;
+  }
+  else 
+  {
+    if(t->status != THREAD_ZOOMBIE)
+    {
+      // printf("try get lock\n");
+      lock_acquire(&t->internal_lock);
+      // printf("get lock\n");
+      t->zoombie_on_exit = 0;
+      return_status = t->userprog_status;
+      lock_release(&t->internal_lock);
+    } 
+    else
+    {
+      // printf("Child is already terminated\n");
+      return_status = t->userprog_status;
+      palloc_free_page(t);
+    }
+  }
+  // printf("Child process return %d\n", return_status);
+  return return_status;
   return -1;
 }
 
@@ -230,8 +303,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   strlcpy(cmd, file_name, MAX_CMD_LEN);
   int argc = userprog_parser(cmd, argv);
   // int j  = 0;
-  // while(argv[i] != NULL){
-  //   printf("%s\n", argv[i++]);
+  // while(argv[j] != NULL){
+  //   printf("%s\n", argv[j++]);
   // }
   /* Open executable file. */
   file = filesys_open (argv[0]);
@@ -462,13 +535,13 @@ setup_stack (void **esp, char **argv, int argc)
   uint8_t *kpage;
   bool success = false;
 
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  kpage = palloc_get_page (PAL_USER | PAL_ZERO); /* kpage is a PHYSICAL page */
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
       {
-        /* Setup the stack by pushing the argv value to the top of stack */
+        /* Pushing the argv value to the top of stack */
         uint8_t *virtual_esp = (uint8_t *) (PHYS_BASE); /* Virtual stack poiter */
         uint32_t argv_addr[argc + 1]; /* Address of argv in the stack */
         argv_addr[argc] = 0; /* The last argv should be NULL */
@@ -482,21 +555,26 @@ setup_stack (void **esp, char **argv, int argc)
         /* Align the stack */
         while(((int) virtual_esp % 4) != 0)
         {
-          *virtual_esp = 0;
           virtual_esp--;
+          *virtual_esp = 0;
         }
         /* Pushing the argv_addr to stack */
         for(i = argc; i >=0; --i)
         {
-          * (uint32_t *) virtual_esp = argv_addr[i];
           virtual_esp -= 4;
+          * (uint32_t *) virtual_esp = argv_addr[i];
         }
         /* Pushing argv itself to stack */
-        *(uint32_t *)virtual_esp = (int) (virtual_esp + 4);
         virtual_esp -= 4;
-        /* Pushing a NULL as fake return address*/
+        *(uint32_t *)virtual_esp = (int) (virtual_esp + 4);
+        /* Pushing argc to stack */
+        virtual_esp -= 4;
+        *(uint32_t *)virtual_esp = argc;
+        /* Pushing a NULL as fake return address */
+        virtual_esp -= 4;
         *(uint32_t *)virtual_esp = 0;
         *esp = virtual_esp;
+        // hex_dump((uint32_t)*esp, *esp, (PHYS_BASE - *esp), 1);
       }
       else
         palloc_free_page (kpage);

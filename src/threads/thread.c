@@ -14,7 +14,6 @@
 #include "threads/intr-stubs.h"
 #include "threads/palloc.h"
 #include "threads/switch.h"
-#include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "devices/timer.h"
 #ifdef USERPROG
@@ -377,7 +376,14 @@ thread_exit (void)
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
+  ASSERT(lock_held_by_current_thread(&thread_current()->internal_lock))
   process_exit ();
+  // list_remove(&thread_current()->child_elem);
+  // printf("get my lock\n");
+  lock_release(&thread_current()->internal_lock); /* Release internal lock, if parrent want then accquire it */
+  // printf("release my lock\n");
+  lock_acquire(&thread_current()->internal_lock); /* Get my lock back again */
+  // printf("get my lock back again\n");
 #endif
 
   /* Remove thread from all threads list, set our status to dying,
@@ -385,6 +391,7 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
+  // list_remove(&thread_current()->wait_elem);
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -611,6 +618,16 @@ init_thread (struct thread *t, const char *name, int priority)
     t->priority = mlfqs_priority;
     t->non_donated_priority = mlfqs_priority;
   }
+  #ifdef USERPROG
+  t->zoombie_on_exit = 1; /* Default to become zoombie, if parrent wait then it will change to 0 */
+  lock_init(&t->internal_lock);
+  list_init(&t->childs);
+  if(t != initial_thread)
+  {
+    t->parrent = thread_current();
+    list_push_back(&thread_current()->childs, &t->child_elem);
+  }
+  #endif // USERPROG
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
 }
@@ -689,7 +706,14 @@ thread_schedule_tail (struct thread *prev)
   if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread) 
     {
       ASSERT (prev != cur);
-      palloc_free_page (prev);
+      if(prev->zoombie_on_exit == 0)
+      {
+        palloc_free_page (prev);
+      }
+      else
+      {
+        prev->status = THREAD_ZOOMBIE;  /* Cannot die */
+      }
     }
 }
 
@@ -783,4 +807,10 @@ thread_cmp( const struct list_elem *a,
     struct thread *t_b = list_entry(b, struct thread, elem);
     if(t_a->priority < t_b->priority) return true;
     else return false;
+}
+
+int is_not_initial(struct thread *t)
+{
+  if(t == initial_thread) return 0;
+  else return 1;
 }

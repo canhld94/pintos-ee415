@@ -5,10 +5,13 @@
 
 #ifndef THREADS_THREAD_H
 #define THREADS_THREAD_H
-
+#define USERPROG 1
+#define NOFILE 10
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include <filesys/filesys.h>
+#include <threads/synch.h>
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -16,7 +19,8 @@ enum thread_status
     THREAD_RUNNING,     /* Running thread. */
     THREAD_READY,       /* Not running but ready to run. */
     THREAD_BLOCKED,     /* Waiting for an event to trigger. */
-    THREAD_DYING        /* About to be destroyed. */
+    THREAD_DYING,       /* About to be destroyed. */
+    THREAD_ZOOMBIE      /* Thread parrent didn't call */
   };
 
 /* Thread identifier type.
@@ -101,6 +105,13 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    struct thread *parrent;             /* Parrent of this process */
+    struct list childs;                 /* Childs of this process */
+    struct list_elem child_elem;        /* List element for child */
+    struct file *ofile[NOFILE];
+    struct lock internal_lock;          /* My own lock */
+    int zoombie_on_exit;                /* Become zoombie on exit */
+    int userprog_status;
 #endif
 
     /* Owned by thread.c. */
@@ -134,6 +145,7 @@ tid_t thread_create (const char *name, int priority, thread_func *, void *);
 void thread_block (void);
 void thread_unblock (struct thread *);
 void thread_sleep(int64_t ticks);
+int is_not_initial(struct thread *t);
 
 struct thread *thread_current (void);
 tid_t thread_tid (void);
