@@ -313,7 +313,7 @@ thread_unblock (struct thread *t)
     /* if t have priority higher than current thread then run it imediately 
       not the idle thread because the first context switching is complex
       the idle thread is stupid but we want it to run */
-  if(t->priority >= thread_get_priority() && thread_current() != idle_thread)
+  if(t->priority > thread_get_priority() && thread_current() != idle_thread)
   {
     thread_yield();
   }
