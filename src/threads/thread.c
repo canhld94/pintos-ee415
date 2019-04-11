@@ -373,17 +373,22 @@ thread_tid (void)
 void
 thread_exit (void) 
 {
+  DBG_MSG("[%s] thread exiting...\n", thread_name());
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
   ASSERT(lock_held_by_current_thread(&thread_current()->internal_lock))
   process_exit ();
-  DBG_MSG("%s get my lock\n", thread_name());
+  DBG_MSG("[%s] get my lock\n", thread_name());
   lock_release(&thread_current()->internal_lock); /* Release internal lock, if parrent want then accquire it */
-  DBG_MSG("%s release my lock\n", thread_name());
-  thread_current()->status = THREAD_ZOOMBIE;  /* Cannot die */
-  lock_acquire(&thread_current()->parrent_lock); /* Get my parrent lock back */
-  DBG_MSG("%s get my parrent lock\n", thread_name());
+  DBG_MSG("[%s] release my lock\n", thread_name());
+  if(lock_try_acquire(&thread_current()->parrent_lock) == false) /* Parrent didn't wait */
+  {
+    thread_current()->status = THREAD_ZOOMBIE;  /* Cannot die :( */
+    lock_acquire(&thread_current()->parrent_lock); /* Get my parrent lock back */
+    DBG_MSG("[%s] get my parrent lock\n", thread_name());
+  }
+  /* Parrent waited for me, exit normally */
 #endif
 
   /* Remove thread from all threads list, set our status to dying,

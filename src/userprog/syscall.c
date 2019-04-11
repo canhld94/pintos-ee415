@@ -95,7 +95,7 @@ static void halt (void)
 }
 static void exit (int status)
 {
-  // printf("exit call\n");
+  DBG_MSG("[%s] exit call\n", thread_name());
   char thread_full_name[128];
   strlcpy(thread_full_name, thread_name(), 128);
   char *process_name, *save_prt;
@@ -106,7 +106,7 @@ static void exit (int status)
 }
 static pid_t exec (const char *file)
 {
-    // printf("Executing %s ...\n", file);
+    DBG_MSG("[%s] executing %s ...\n", thread_name(), file);
     pid_t pid = process_execute(file);
     return pid;
 

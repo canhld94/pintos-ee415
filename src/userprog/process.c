@@ -121,7 +121,7 @@ int
 process_wait (tid_t child_tid) 
 {
   /* travel the child list */
-  DBG_MSG("%s calls wait\n",thread_name());
+  DBG_MSG("[%s] calls wait\n",thread_name());
   struct list_elem *e = list_begin(&thread_current()->childs);
   struct thread *t = NULL;
   int return_status;
@@ -129,7 +129,7 @@ process_wait (tid_t child_tid)
   {
     struct thread *t0 = list_entry(e, struct thread, child_elem);
     if(t0->tid == child_tid){
-      DBG_MSG("%s found pid in childs %s\n", thread_name(), t0->name);
+      DBG_MSG("[%s] found pid in childs %s\n", thread_name(), t0->name);
       t = t0;
       break;
     }
@@ -137,20 +137,20 @@ process_wait (tid_t child_tid)
   }
   if(t == NULL) /* child_pid is invalid */
   {
-    DBG_MSG("%s No valid pid found\n", thread_name());
+    DBG_MSG("[%s] No valid pid found\n", thread_name());
     return_status = -1;
   }
   else 
   {
-    DBG_MSG("%s try get child lock of %s\n", thread_name(), t->name);
+    DBG_MSG("[%s] try get child lock of %s\n", thread_name(), t->name);
     lock_acquire(&t->internal_lock);
-    DBG_MSG("%s get child lock of %s\n", thread_name(), t->name);
+    DBG_MSG("[%s] get child lock of %s\n", thread_name(), t->name);
     return_status = t->userprog_status;
     list_remove(&t->child_elem);
-    DBG_MSG("%s release child parrent lock of %s\n", thread_name(), t->name);
+    DBG_MSG("[%s] release child parrent lock of %s\n", thread_name(), t->name);
     lock_release(&t->parrent_lock);
   }
-  DBG_MSG("Child process return %d\n", return_status);
+  DBG_MSG("[%s] Child process return %d\n", thread_name(), return_status);
   return return_status;
   return -1;
 }
