@@ -313,7 +313,7 @@ thread_unblock (struct thread *t)
     /* if t have priority higher than current thread then run it imediately 
       not the idle thread because the first context switching is complex
       the idle thread is stupid but we want it to run */
-  if(t->priority > thread_get_priority() && thread_current() != idle_thread)
+  if(t->priority >= thread_get_priority() && thread_current() != idle_thread)
   {
     thread_yield();
   }
@@ -356,7 +356,7 @@ thread_current (void)
      of stack, so a few big automatic arrays or moderate
      recursion can cause stack overflow. */
   ASSERT (is_thread (t));
-  ASSERT (t->status == THREAD_RUNNING);
+  ASSERT (t->status == THREAD_RUNNING || t->status == THREAD_ZOOMBIE);
 
   return t;
 }
@@ -378,12 +378,12 @@ thread_exit (void)
 #ifdef USERPROG
   ASSERT(lock_held_by_current_thread(&thread_current()->internal_lock))
   process_exit ();
-  // list_remove(&thread_current()->child_elem);
-  // printf("%s get my lock\n", thread_name());
+  DBG_MSG("%s get my lock\n", thread_name());
   lock_release(&thread_current()->internal_lock); /* Release internal lock, if parrent want then accquire it */
-  // printf("%s release my lock\n", thread_name());
-  lock_acquire(&thread_current()->parrent_lock); /* Get my lock back again */
-  // printf("%s get my parrent lock\n", thread_name());
+  DBG_MSG("%s release my lock\n", thread_name());
+  thread_current()->status = THREAD_ZOOMBIE;  /* Cannot die */
+  lock_acquire(&thread_current()->parrent_lock); /* Get my parrent lock back */
+  DBG_MSG("%s get my parrent lock\n", thread_name());
 #endif
 
   /* Remove thread from all threads list, set our status to dying,
@@ -391,7 +391,6 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
-  // list_remove(&thread_current()->wait_elem);
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -619,7 +618,6 @@ init_thread (struct thread *t, const char *name, int priority)
     t->non_donated_priority = mlfqs_priority;
   }
   #ifdef USERPROG
-  t->zoombie_on_exit = 1; /* Default to become zoombie, if parrent wait then it will change to 0 */
   lock_init(&t->internal_lock);
   lock_init(&t->parrent_lock);
   list_init(&t->childs);
@@ -708,15 +706,7 @@ thread_schedule_tail (struct thread *prev)
   if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread) 
     {
       ASSERT (prev != cur);
-      if(prev->zoombie_on_exit == 0)
-      {
-        // list_remove(&prev->child_elem);
-        palloc_free_page (prev);
-      }
-      else
-      {
-        prev->status = THREAD_ZOOMBIE;  /* Cannot die */
-      }
+      palloc_free_page (prev);
     }
 }
 

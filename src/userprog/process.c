@@ -51,7 +51,7 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (thread_args->fn_copy, file_name, 1024);
   /* Create a new thread to execute FILE_NAME. */
-  /* But before that, accquire lock */
+  /* But before that, accquire the execution lock */
   lock_acquire(&thread_args->ex_lock);
   tid = thread_create (file_name, PRI_DEFAULT, start_process, thread_args);
   if(tid == TID_ERROR)
@@ -60,7 +60,8 @@ process_execute (const char *file_name)
     palloc_free_page (thread_args); 
     return tid;
   }
-  cond_wait(&thread_args->ex_cond, &thread_args->ex_lock);  /* Wait for the condition */
+  /* Wait for the condition - exe success or not */
+  cond_wait(&thread_args->ex_cond, &thread_args->ex_lock); 
   lock_release(&thread_args->ex_lock);
   if (thread_args->load_status == false)
     tid = -1;
@@ -86,8 +87,6 @@ start_process (void *thread_args_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
-  // if_.esp_dummy = (uint32_t) if_.esp;
-  // printf("0x%x\n", if_.esp_dummy);
   /* Now we know that the exec is success or not, so signal the parrent */
   /* If load failed, quit. --> parrent will free args, relax */
   thread_args->load_status = success;
@@ -95,10 +94,8 @@ start_process (void *thread_args_)
   cond_signal(&thread_args->ex_cond, &thread_args->ex_lock);
   lock_release(&thread_args->ex_lock);
   if (!success){
-    // list_remove(&thread_current()->child_elem); /* We cannot do it in thread_exit */
     thread_exit ();
   }
-  // printf("ready to run userprog\n");
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -118,11 +115,13 @@ start_process (void *thread_args_)
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
+/* Ping-pong solution for wait:
+   - When parrent create  */
 int
 process_wait (tid_t child_tid) 
 {
   /* travel the child list */
-  // printf("%s calls wait\n",thread_name());
+  DBG_MSG("%s calls wait\n",thread_name());
   struct list_elem *e = list_begin(&thread_current()->childs);
   struct thread *t = NULL;
   int return_status;
@@ -130,7 +129,7 @@ process_wait (tid_t child_tid)
   {
     struct thread *t0 = list_entry(e, struct thread, child_elem);
     if(t0->tid == child_tid){
-      // printf("%s found pid in childs %s\n", thread_name(), t0->name);
+      DBG_MSG("%s found pid in childs %s\n", thread_name(), t0->name);
       t = t0;
       break;
     }
@@ -138,31 +137,20 @@ process_wait (tid_t child_tid)
   }
   if(t == NULL) /* child_pid is invalid */
   {
-    // printf("No valid pid found\n");
+    DBG_MSG("%s No valid pid found\n", thread_name());
     return_status = -1;
   }
   else 
   {
-    if(t->status != THREAD_ZOOMBIE)
-    {
-      // printf("%s try get child lock of %s\n", thread_name(), t->name);
-      lock_acquire(&t->internal_lock);
-      // printf("%s get child lock of %s\n", thread_name(), t->name);
-      t->zoombie_on_exit = 0;
-      // printf("%s release child parrent lock of %s\n", thread_name(), t->name);
-      return_status = t->userprog_status;
-      list_remove(&t->child_elem);
-      lock_release(&t->parrent_lock);
-    } 
-    else
-    {
-      // printf("%s child is already terminated %s\n", thread_name(), t->name);
-      list_remove(&t->child_elem);
-      return_status = t->userprog_status;
-      palloc_free_page(t);
-    }
+    DBG_MSG("%s try get child lock of %s\n", thread_name(), t->name);
+    lock_acquire(&t->internal_lock);
+    DBG_MSG("%s get child lock of %s\n", thread_name(), t->name);
+    return_status = t->userprog_status;
+    list_remove(&t->child_elem);
+    DBG_MSG("%s release child parrent lock of %s\n", thread_name(), t->name);
+    lock_release(&t->parrent_lock);
   }
-  // printf("Child process return %d\n", return_status);
+  DBG_MSG("Child process return %d\n", return_status);
   return return_status;
   return -1;
 }

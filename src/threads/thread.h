@@ -5,13 +5,21 @@
 
 #ifndef THREADS_THREAD_H
 #define THREADS_THREAD_H
-#define USERPROG 1
+#define USERPROG
+#define DEBUG 0
 #define NOFILE 10
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
 #include <filesys/filesys.h>
 #include <threads/synch.h>
+
+/* Debug  */
+#if(DEBUG > 0)
+  #define DBG_MSG printf
+#else 
+  #define DBG_MSG(...) do {} while (0)
+#endif // DEBUG
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -111,7 +119,6 @@ struct thread
     struct file *ofile[NOFILE];
     struct lock internal_lock;          /* My own lock */
     struct lock parrent_lock;           /* My parrent lock */
-    int zoombie_on_exit;                /* Become zoombie on exit */
     int userprog_status;
 #endif
 
