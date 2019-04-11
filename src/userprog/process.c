@@ -151,11 +151,13 @@ process_wait (tid_t child_tid)
       t->zoombie_on_exit = 0;
       // printf("%s release child parrent lock of %s\n", thread_name(), t->name);
       return_status = t->userprog_status;
+      list_remove(&t->child_elem);
       lock_release(&t->parrent_lock);
     } 
     else
     {
       // printf("%s child is already terminated %s\n", thread_name(), t->name);
+      list_remove(&t->child_elem);
       return_status = t->userprog_status;
       palloc_free_page(t);
     }

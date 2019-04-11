@@ -710,6 +710,7 @@ thread_schedule_tail (struct thread *prev)
       ASSERT (prev != cur);
       if(prev->zoombie_on_exit == 0)
       {
+        // list_remove(&prev->child_elem);
         palloc_free_page (prev);
       }
       else
