@@ -1,5 +1,6 @@
 #include "userprog/syscall.h"
 #include <lib/stdio.h>
+#include "lib/limits.h"
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
@@ -11,7 +12,6 @@
 
 static void syscall_handler (struct intr_frame *);
 static void halt (void) NO_RETURN;
-static void exit (int status) NO_RETURN;
 static pid_t exec (const char *file);
 static int wait (pid_t);
 static bool create (const char *file, unsigned initial_size);
@@ -95,7 +95,7 @@ static void halt (void)
   DBG_MSG("[%s] calls halt\n", thread_name());
   shutdown_power_off();
 }
-static void exit (int status)
+void exit (int status)
 {
   DBG_MSG("[%s] calls exit\n", thread_name());
   char thread_full_name[128];
@@ -129,6 +129,10 @@ static bool create (const char *file, unsigned initial_size)
   {
     exit(-1);
   }
+  if(strlen(file) > UCHAR_MAX)
+  {
+    return 0;
+  }
 
 }
 static bool remove (const char *file)
@@ -144,7 +148,7 @@ static int open (const char *file)
   DBG_MSG("[%s] calls open %s\n", thread_name(), file);
   if(file == NULL || !*file)
   {
-    exit(-1);
+    return -1;
   }
 }
 static int filesize (int fd)
