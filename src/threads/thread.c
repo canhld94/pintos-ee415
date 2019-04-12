@@ -632,6 +632,12 @@ init_thread (struct thread *t, const char *name, int priority)
     list_push_back(&thread_current()->childs, &t->child_elem);
     lock_acquire(&t->parrent_lock);
   }
+  /* Init the file descriptor array */
+  int i;
+  for (i = 0; i < NOFILE; i++)
+  {
+    t->ofile[i] = NULL;
+  }
   #endif // USERPROG
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);

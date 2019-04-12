@@ -9,6 +9,8 @@
 #include "lib/kernel/stdio.h"
 #include <string.h>
 #include <userprog/process.h>
+#include "filesys/filesys.h"
+#include "filesys/file.h"
 
 static void syscall_handler (struct intr_frame *);
 static void halt (void) NO_RETURN;
@@ -72,8 +74,9 @@ syscall_handler (struct intr_frame *f)
       break;
     case SYS_READ:                   /* Read from a file. */
       ret_val = read(arg0, arg1, arg2);
+      break;
     case SYS_WRITE:                  /* Write to a file. */
-      ret_val = write (arg0, arg1, arg2);
+      ret_val = write(arg0, arg1, arg2);
       break;
     case SYS_SEEK:                   /* Change position in a file. */         
       seek(arg0, arg1);
@@ -95,6 +98,7 @@ static void halt (void)
   DBG_MSG("[%s] calls halt\n", thread_name());
   shutdown_power_off();
 }
+
 void exit (int status)
 {
   DBG_MSG("[%s] calls exit\n", thread_name());
@@ -106,6 +110,7 @@ void exit (int status)
   thread_current()->userprog_status = status;
   thread_exit();
 }
+
 static pid_t exec (const char *file)
 {
     DBG_MSG("[%s] calls exec %s \n", thread_name(), file);
@@ -117,11 +122,13 @@ static pid_t exec (const char *file)
     return pid;
 
 }
+
 static int wait (pid_t p)
 {
   DBG_MSG("[%s] calls wait to %d\n", thread_name(), p);
   return process_wait(p);
 }
+
 static bool create (const char *file, unsigned initial_size)
 {
   DBG_MSG("[%s] calls open %s\n", thread_name(), file);
@@ -133,8 +140,10 @@ static bool create (const char *file, unsigned initial_size)
   {
     return 0;
   }
-
+  /* Otherwise, just create */
+  return filesys_create(file, initial_size);
 }
+
 static bool remove (const char *file)
 {
   DBG_MSG("[%s] calls remove %s\n", thread_name(), file);
@@ -142,7 +151,9 @@ static bool remove (const char *file)
   {
     exit(-1);
   }
+  return filesys_remove(file);
 }
+
 static int open (const char *file)
 {
   DBG_MSG("[%s] calls open %s\n", thread_name(), file);
@@ -150,7 +161,22 @@ static int open (const char *file)
   {
     return -1;
   }
+  struct file *tmp = filesys_open(file);   /* Open file */
+  if(tmp == NULL) return -1;  /* If failed, return -1 */
+  DBG_MSG("[%s] filesys_open %s success\n", thread_name(), file);
+  /* If success find the first index that ofile[index] = NULL
+     and return index + 2 */
+  int i = 0;
+  while(i < NOFILE && thread_current()->ofile[i] != NULL)
+  {
+    i++;
+  }
+  if(i == NOFILE) return -1; /* excess number of opened file */
+  thread_current()->ofile[i] = tmp;
+  DBG_MSG("[%s] open %s return %d\n", thread_name(), file, i + 2);
+  return i + 2; 
 }
+
 static int filesize (int fd)
 {
   if(fd < 0)
@@ -165,9 +191,11 @@ static int filesize (int fd)
     case STDOUT_FILENO: /* stdout */
       exit(-1);
     default:
+      return(file_length(thread_current()->ofile[fd - 2]));
       break;
   }
 }
+
 static int read (int fd, void *buffer, unsigned length)
 {
   DBG_MSG("[%s] calls read %d bytes from %d\n", thread_name(), length, fd);
@@ -183,9 +211,12 @@ static int read (int fd, void *buffer, unsigned length)
     case STDOUT_FILENO: /* stdout */
       exit(-1);
     default:
+      ASSERT(thread_current()->ofile[fd - 2] != NULL);
+      return file_read(thread_current()->ofile[fd - 2], buffer, length);
       break;
   }
 }
+
 static int write (int fd, const void *buffer, unsigned length)
 {
   DBG_MSG("[%s] calls write %d bytes to %d\n", thread_name(), length, fd);
@@ -202,10 +233,12 @@ static int write (int fd, const void *buffer, unsigned length)
       putbuf(buffer, length);
       break;
     default:
+      return file_write(thread_current()->ofile[fd - 2], buffer, length);
       break;
   }
   return 0;   
 }
+
 static void seek (int fd, unsigned position)
 {
   if(fd < 0)
@@ -220,9 +253,11 @@ static void seek (int fd, unsigned position)
     case STDOUT_FILENO: /* stdout */
       exit(-1);
     default:
+      file_seek(thread_current()->ofile[fd - 2], position);
       break;
   }
 }
+
 static unsigned tell (int fd)
 {
   if(fd < 0)
@@ -237,6 +272,7 @@ static unsigned tell (int fd)
     case STDOUT_FILENO: /* stdout */
       exit(-1);
     default:
+      return file_tell(thread_current()->ofile[fd - 2]);
       break;
   }
 }
@@ -254,6 +290,10 @@ static void close (int fd)
     case STDOUT_FILENO: /* stdout */
       exit(-1);
     default:
+      if(thread_current()->ofile[fd - 2] == NULL) /* Didn't open */
+        return -1;
+      file_close(thread_current()->ofile[fd - 2]);
+      thread_current()->ofile[fd - 2] = NULL;
       break;
   }
 }
