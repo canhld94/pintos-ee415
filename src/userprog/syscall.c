@@ -35,14 +35,15 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-  // hex_dump((uint32_t)f->esp, f->esp, (PHYS_BASE - f->esp), 1); 
-  // printf("System call number %d\n", *(int*)f->esp);
-  // return;
   char *esp = f->esp;
-  // char *base = (char *) f->esp_dummy;
-  int arg0 = TO_ARG(esp, 1), arg1 = TO_ARG(esp, 2), arg2 = TO_ARG(esp, 3);
+  int syscall = TO_ARG(esp,0), arg0 = TO_ARG(esp, 1), arg1 = TO_ARG(esp, 2), arg2 = TO_ARG(esp, 3);
+  /* Check memory access */
+  if(esp >= PHYS_BASE || arg0 >= PHYS_BASE || arg1 >= PHYS_BASE || arg2 >= PHYS_BASE)
+  {
+    exit(-1);
+  }
   int ret_val;
-  switch (* (int *)esp)
+  switch (syscall)
   {
       /* code */
     case SYS_HALT:                   /* Halt the operating system. */       
@@ -91,11 +92,12 @@ syscall_handler (struct intr_frame *f)
 
 static void halt (void)
 {
+  DBG_MSG("[%s] calls halt\n", thread_name());
   shutdown_power_off();
 }
 static void exit (int status)
 {
-  DBG_MSG("[%s] exit call\n", thread_name());
+  DBG_MSG("[%s] calls exit\n", thread_name());
   char thread_full_name[128];
   strlcpy(thread_full_name, thread_name(), 128);
   char *process_name, *save_prt;
@@ -106,44 +108,95 @@ static void exit (int status)
 }
 static pid_t exec (const char *file)
 {
-    DBG_MSG("[%s] executing %s ...\n", thread_name(), file);
+    DBG_MSG("[%s] calls exec %s \n", thread_name(), file);
+    if(file == NULL)
+    {
+      exit(-1);
+    }
     pid_t pid = process_execute(file);
     return pid;
 
 }
 static int wait (pid_t p)
 {
+  DBG_MSG("[%s] calls wait to %d\n", thread_name(), p);
   return process_wait(p);
 }
 static bool create (const char *file, unsigned initial_size)
 {
+  DBG_MSG("[%s] calls open %s\n", thread_name(), file);
+  if(file == NULL || !*file)
+  {
+    exit(-1);
+  }
 
 }
 static bool remove (const char *file)
 {
-
+  DBG_MSG("[%s] calls remove %s\n", thread_name(), file);
+  if(file == NULL)
+  {
+    exit(-1);
+  }
 }
 static int open (const char *file)
 {
-
+  DBG_MSG("[%s] calls open %s\n", thread_name(), file);
+  if(file == NULL || !*file)
+  {
+    exit(-1);
+  }
 }
 static int filesize (int fd)
 {
-
-}
-static int read (int fd, void *buffer, unsigned length)
-{
-
-}
-static int write (int fd, const void *buffer, unsigned length)
-{
-  // printf("this is write to %d with 0x%x and len %d\n", fd, buffer, length);
+  if(fd < 0)
+  {
+    exit(-1);
+  }
   switch (fd)
   {
     case STDIN_FILENO: /* stdin */
+      exit(-1);
+      break;
+    case STDOUT_FILENO: /* stdout */
+      exit(-1);
+    default:
+      break;
+  }
+}
+static int read (int fd, void *buffer, unsigned length)
+{
+  DBG_MSG("[%s] calls read %d bytes from %d\n", thread_name(), length, fd);
+  if(buffer == NULL || fd < 0)
+  {
+    exit(-1);
+  }
+  switch (fd)
+  {
+    case STDIN_FILENO: /* stdin */
+      return strlen(buffer);
+      break;
+    case STDOUT_FILENO: /* stdout */
+      exit(-1);
+    default:
+      break;
+  }
+}
+static int write (int fd, const void *buffer, unsigned length)
+{
+  DBG_MSG("[%s] calls write %d bytes to %d\n", thread_name(), length, fd);
+  if(buffer == NULL || fd < 0)
+  {
+    exit(-1);
+  }
+  switch (fd)
+  {
+    case STDIN_FILENO: /* stdin */
+      exit(-1);
       break;
     case STDOUT_FILENO: /* stdout */
       putbuf(buffer, length);
+      break;
     default:
       break;
   }
@@ -151,13 +204,52 @@ static int write (int fd, const void *buffer, unsigned length)
 }
 static void seek (int fd, unsigned position)
 {
-
+  if(fd < 0)
+  {
+    exit(-1);
+  }
+  switch (fd)
+  {
+    case STDIN_FILENO: /* stdin */
+      exit(-1);
+      break;
+    case STDOUT_FILENO: /* stdout */
+      exit(-1);
+    default:
+      break;
+  }
 }
 static unsigned tell (int fd)
 {
-
+  if(fd < 0)
+  {
+    exit(-1);
+  }
+  switch (fd)
+  {
+    case STDIN_FILENO: /* stdin */
+      exit(-1);
+      break;
+    case STDOUT_FILENO: /* stdout */
+      exit(-1);
+    default:
+      break;
+  }
 }
 static void close (int fd)
 {
-
+  if(fd < 0)
+  {
+    exit(-1);
+  }
+  switch (fd)
+  {
+    case STDIN_FILENO: /* stdin */
+      exit(-1);
+      break;
+    case STDOUT_FILENO: /* stdout */
+      exit(-1);
+    default:
+      break;
+  }
 }

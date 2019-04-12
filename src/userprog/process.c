@@ -121,7 +121,6 @@ int
 process_wait (tid_t child_tid) 
 {
   /* travel the child list */
-  DBG_MSG("[%s] calls wait\n",thread_name());
   struct list_elem *e = list_begin(&thread_current()->childs);
   struct thread *t = NULL;
   int return_status;
