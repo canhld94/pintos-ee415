@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <filesys/filesys.h>
 #include <threads/synch.h>
+#include "filesys/file.h"
 
 /* Debug  */
 #if(DEBUG > 0)
@@ -120,6 +121,7 @@ struct thread
     struct lock internal_lock;          /* My own lock */
     struct lock parrent_lock;           /* My parrent lock */
     int userprog_status;
+    struct file *my_elf;
 #endif
 
     /* Owned by thread.c. */

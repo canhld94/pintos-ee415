@@ -377,6 +377,7 @@ thread_exit (void)
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
+  file_close(thread_current()->my_elf);
   ASSERT(lock_held_by_current_thread(&thread_current()->internal_lock))
   process_exit ();
   DBG_MSG("[%s] get my lock\n", thread_name());
@@ -638,6 +639,7 @@ init_thread (struct thread *t, const char *name, int priority)
   {
     t->ofile[i] = NULL;
   }
+  t->my_elf = NULL;
   #endif // USERPROG
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
