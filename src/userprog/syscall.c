@@ -198,7 +198,6 @@ static int filesize (int fd)
 
 static int read (int fd, void *buffer, unsigned length)
 {
-  DBG_MSG("[%s] calls read %d bytes from %d\n", thread_name(), length, fd);
   if(buffer == NULL || fd < 0)
   {
     exit(-1);
@@ -211,6 +210,7 @@ static int read (int fd, void *buffer, unsigned length)
     case STDOUT_FILENO: /* stdout */
       exit(-1);
     default:
+      DBG_MSG("[%s] calls read %d bytes from %d\n", thread_name(), length, fd);
       ASSERT(thread_current()->ofile[fd - 2] != NULL);
       return file_read(thread_current()->ofile[fd - 2], buffer, length);
       break;
@@ -219,7 +219,6 @@ static int read (int fd, void *buffer, unsigned length)
 
 static int write (int fd, const void *buffer, unsigned length)
 {
-  DBG_MSG("[%s] calls write %d bytes to %d\n", thread_name(), length, fd);
   if(buffer == NULL || fd < 0)
   {
     exit(-1);
@@ -233,6 +232,7 @@ static int write (int fd, const void *buffer, unsigned length)
       putbuf(buffer, length);
       break;
     default:
+      DBG_MSG("[%s] calls write %d bytes to %d\n", thread_name(), length, fd);
       return file_write(thread_current()->ofile[fd - 2], buffer, length);
       break;
   }

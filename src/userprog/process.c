@@ -52,6 +52,7 @@ process_execute (const char *file_name)
   strlcpy (thread_args->fn_copy, file_name, 1024);
   /* Create a new thread to execute FILE_NAME. */
   /* But before that, accquire the execution lock */
+  DBG_MSG("[%s] accquire child execution lock of %s\n",thread_name(), file_name);
   lock_acquire(&thread_args->ex_lock);
   tid = thread_create (file_name, PRI_DEFAULT, start_process, thread_args);
   if(tid == TID_ERROR)
@@ -61,7 +62,9 @@ process_execute (const char *file_name)
     return tid;
   }
   /* Wait for the condition - exe success or not */
+  DBG_MSG("[%s] wating for exec signal from child %s\n", thread_name(), file_name);
   cond_wait(&thread_args->ex_cond, &thread_args->ex_lock); 
+  DBG_MSG("[%s] get exec signal from child %s\n", thread_name(), file_name);
   lock_release(&thread_args->ex_lock);
   if (thread_args->load_status == false)
     tid = -1;
@@ -90,9 +93,11 @@ start_process (void *thread_args_)
   /* Now we know that the exec is success or not, so signal the parrent */
   /* If load failed, quit. --> parrent will free args, relax */
   thread_args->load_status = success;
+  DBG_MSG("[%s] Signaling my parrent %s...\n", thread_name(), thread_current()->parrent->name);
   lock_acquire(&thread_args->ex_lock);
   cond_signal(&thread_args->ex_cond, &thread_args->ex_lock);
   lock_release(&thread_args->ex_lock);
+  DBG_MSG("[%s] Signaling OK...\n", thread_name());
   if (!success){
     thread_exit ();
   }
