@@ -744,6 +744,7 @@ schedule (void)
   if (cur != next)
     prev = switch_threads (cur, next);
   thread_schedule_tail (prev);
+  DBG_MSG("[%s] get CPU\n", thread_name());
 }
 
 /* Returns a tid to use for a new thread. */
