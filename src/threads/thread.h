@@ -5,7 +5,7 @@
 
 #ifndef THREADS_THREAD_H
 #define THREADS_THREAD_H
-#define USERPROG
+// #define USERPROG
 #define DEBUG 0
 #define NOFILE 10
 #include <debug.h>

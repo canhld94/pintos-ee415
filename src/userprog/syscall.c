@@ -117,7 +117,7 @@ void exit (int status)
 static pid_t exec (const char *file)
 {
     DBG_MSG_USERPROG("[%s] calls exec %s \n", thread_name(), file);
-    if(file == NULL)
+    if(file == NULL || !file)
     {
       exit(-1);
     }

@@ -133,8 +133,12 @@ sema_up (struct semaphore *sema)
       while ((e = list_next (e)) != list_end (&sema->waiters)) 
         {
           struct thread *p = list_entry(e, struct thread, elem);
-          list_remove(&p->wait_elem);
-          p->waitee = NULL;
+          DBG_MSG_THREAD("[%s] remove %s from waiters list\n", thread_name(), p->name);
+          if(p->waitee != NULL)
+          {
+            list_remove(&p->wait_elem);
+            p->waitee = NULL;
+          }
         }
     }
     /* Select the thread with highest priority to wake up */
@@ -225,6 +229,7 @@ lock_acquire (struct lock *lock)
   if(t != NULL)
   {
     /* Add current thread to the waiter list of holder */
+    DBG_MSG_THREAD("[%s] adding to %s waiters \n", thread_name(), t->name);
     list_push_back(&t->waiters, &thread_current()->wait_elem);
     /* Set current thread waitee to lock holder */
     thread_current()->waitee = t;

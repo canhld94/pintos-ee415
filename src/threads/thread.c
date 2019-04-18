@@ -379,7 +379,7 @@ thread_exit (void)
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
-  file_close(thread_current()->my_elf);
+  if(thread_current()->my_elf != NULL) file_close(thread_current()->my_elf);
   ASSERT(lock_held_by_current_thread(&thread_current()->internal_lock))
   process_exit ();
   DBG_MSG_THREAD("[%s] get my lock\n", thread_name());
@@ -746,7 +746,7 @@ schedule (void)
   if (cur != next)
     prev = switch_threads (cur, next);
   thread_schedule_tail (prev);
-  DBG_MSG_THREAD("[%s] get CPU\n", thread_name());
+  // DBG_MSG_THREAD("[%s] get CPU\n", thread_name());
 }
 
 /* Returns a tid to use for a new thread. */

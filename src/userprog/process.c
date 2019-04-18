@@ -56,7 +56,6 @@ process_execute (const char *file_name)
   lock_acquire(&thread_args->ex_lock);
   DBG_MSG_USERPROG("[%s] create child %s\n",thread_name(), file_name);
   tid = thread_create (file_name, PRI_DEFAULT, start_process, thread_args);
-  DBG_MSG_USERPROG("[%s] wating for exec signal from child %s\n", thread_name(), file_name);
   if(tid == TID_ERROR)
   {
     DBG_MSG_USERPROG("[%s] child create error %s\n",thread_name(), file_name);
@@ -310,7 +309,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
   // }
   /* Open executable file. */
   DBG_MSG_USERPROG("[%s] open userprog %s\n", thread_name(), argv[0]);
+  int attempt = 0;
+  while(file == NULL && attempt < 5) /* Busy wait, no way now */
+  {
   file = filesys_open (argv[0]);
+  thread_sleep(10);
+  attempt++;
+  }
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", argv[0]);
