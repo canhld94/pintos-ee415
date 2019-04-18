@@ -251,6 +251,8 @@ thread_create (const char *name, int priority,
 
   /* Initialize thread. */
   init_thread (t, name, priority);
+  DBG_MSG_THREAD("[%s] created %s\n", thread_name(), t->name);
+
   tid = t->tid = allocate_tid ();
 
   /* Stack frame for kernel_thread(). */
@@ -313,7 +315,7 @@ thread_unblock (struct thread *t)
     /* if t have priority higher than current thread then run it imediately 
       not the idle thread because the first context switching is complex
       the idle thread is stupid but we want it to run */
-  if(t->priority > thread_get_priority() && thread_current() != idle_thread)
+  if(t->priority >= thread_get_priority() && thread_current() != idle_thread && !intr_context())
   {
     thread_yield();
   }
@@ -373,21 +375,21 @@ thread_tid (void)
 void
 thread_exit (void) 
 {
-  DBG_MSG("[%s] thread exiting...\n", thread_name());
+  DBG_MSG_THREAD("[%s] thread exiting...\n", thread_name());
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
   file_close(thread_current()->my_elf);
   ASSERT(lock_held_by_current_thread(&thread_current()->internal_lock))
   process_exit ();
-  DBG_MSG("[%s] get my lock\n", thread_name());
+  DBG_MSG_THREAD("[%s] get my lock\n", thread_name());
   lock_release(&thread_current()->internal_lock); /* Release internal lock, if parrent want then accquire it */
-  DBG_MSG("[%s] release my lock\n", thread_name());
+  DBG_MSG_THREAD("[%s] release my lock\n", thread_name());
   if(lock_try_acquire(&thread_current()->parrent_lock) == false) /* Parrent didn't wait */
   {
     thread_current()->status = THREAD_ZOOMBIE;  /* Cannot die :( */
     lock_acquire(&thread_current()->parrent_lock); /* Get my parrent lock back */
-    DBG_MSG("[%s] get my parrent lock\n", thread_name());
+    DBG_MSG_THREAD("[%s] get my parrent lock\n", thread_name());
   }
   /* Parrent waited for me, exit normally */
 #endif
@@ -744,7 +746,7 @@ schedule (void)
   if (cur != next)
     prev = switch_threads (cur, next);
   thread_schedule_tail (prev);
-  DBG_MSG("[%s] get CPU\n", thread_name());
+  DBG_MSG_THREAD("[%s] get CPU\n", thread_name());
 }
 
 /* Returns a tid to use for a new thread. */

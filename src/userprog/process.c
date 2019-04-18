@@ -52,20 +52,23 @@ process_execute (const char *file_name)
   strlcpy (thread_args->fn_copy, file_name, 1024);
   /* Create a new thread to execute FILE_NAME. */
   /* But before that, accquire the execution lock */
-  DBG_MSG("[%s] accquire child execution lock of %s\n",thread_name(), file_name);
+  DBG_MSG_USERPROG("[%s] accquire child execution lock of %s\n",thread_name(), file_name);
   lock_acquire(&thread_args->ex_lock);
+  DBG_MSG_USERPROG("[%s] create child %s\n",thread_name(), file_name);
   tid = thread_create (file_name, PRI_DEFAULT, start_process, thread_args);
+  DBG_MSG_USERPROG("[%s] wating for exec signal from child %s\n", thread_name(), file_name);
   if(tid == TID_ERROR)
   {
+    DBG_MSG_USERPROG("[%s] child create error %s\n",thread_name(), file_name);
     lock_release(&thread_args->ex_lock); /* it's ok? */
     palloc_free_page (thread_args); 
     return tid;
   }
   /* Wait for the condition - exe success or not */
-  DBG_MSG("[%s] wating for exec signal from child %s\n", thread_name(), file_name);
+  DBG_MSG_USERPROG("[%s] wating for exec signal from child %s\n", thread_name(), file_name);
   cond_wait(&thread_args->ex_cond, &thread_args->ex_lock); 
-  DBG_MSG("[%s] get exec signal from child %s\n", thread_name(), file_name);
   lock_release(&thread_args->ex_lock);
+  DBG_MSG_USERPROG("[%s] get exec signal from child %s\n", thread_name(), file_name);
   if (thread_args->load_status == false)
     tid = -1;
   palloc_free_page (thread_args); 
@@ -78,7 +81,9 @@ static void
 start_process (void *thread_args_)
 {
   /* Otherwise, run, accquire my own lock first */
+  DBG_MSG_USERPROG("[%s] trying to get my internal lock \n", thread_name());
   lock_acquire(&thread_current()->internal_lock);
+  DBG_MSG_USERPROG("[%s] get my internal lock\n", thread_name());
   struct execution *thread_args = thread_args_;
   char *file_name = thread_args->fn_copy;
   struct intr_frame if_;
@@ -89,15 +94,16 @@ start_process (void *thread_args_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+  DBG_MSG_USERPROG("[%s] loading userprog %s\n", thread_name(), file_name);
   success = load (file_name, &if_.eip, &if_.esp);
   /* Now we know that the exec is success or not, so signal the parrent */
   /* If load failed, quit. --> parrent will free args, relax */
   thread_args->load_status = success;
-  DBG_MSG("[%s] Signaling my parrent %s...\n", thread_name(), thread_current()->parrent->name);
+  DBG_MSG_USERPROG("[%s] signaling my parrent %s...\n", thread_name(), thread_current()->parrent->name);
   lock_acquire(&thread_args->ex_lock);
   cond_signal(&thread_args->ex_cond, &thread_args->ex_lock);
   lock_release(&thread_args->ex_lock);
-  DBG_MSG("[%s] Signaling OK...\n", thread_name());
+  DBG_MSG_USERPROG("[%s] signaling OK...\n", thread_name());
   if (!success){
     thread_exit ();
   }
@@ -133,7 +139,7 @@ process_wait (tid_t child_tid)
   {
     struct thread *t0 = list_entry(e, struct thread, child_elem);
     if(t0->tid == child_tid){
-      DBG_MSG("[%s] found pid in childs %s\n", thread_name(), t0->name);
+      DBG_MSG_USERPROG("[%s] found pid in childs %s\n", thread_name(), t0->name);
       t = t0;
       break;
     }
@@ -141,20 +147,20 @@ process_wait (tid_t child_tid)
   }
   if(t == NULL) /* child_pid is invalid */
   {
-    DBG_MSG("[%s] No valid pid found\n", thread_name());
+    DBG_MSG_USERPROG("[%s] No valid pid found\n", thread_name());
     return_status = -1;
   }
   else 
   {
-    DBG_MSG("[%s] try get child lock of %s\n", thread_name(), t->name);
+    DBG_MSG_USERPROG("[%s] try get child lock of %s\n", thread_name(), t->name);
     lock_acquire(&t->internal_lock);
-    DBG_MSG("[%s] get child lock of %s\n", thread_name(), t->name);
+    DBG_MSG_USERPROG("[%s] get child lock of %s\n", thread_name(), t->name);
     return_status = t->userprog_status;
     list_remove(&t->child_elem);
-    DBG_MSG("[%s] release child parrent lock of %s\n", thread_name(), t->name);
+    DBG_MSG_USERPROG("[%s] release child parrent lock of %s\n", thread_name(), t->name);
     lock_release(&t->parrent_lock);
   }
-  DBG_MSG("[%s] Child process return %d\n", thread_name(), return_status);
+  DBG_MSG_USERPROG("[%s] Child process return %d\n", thread_name(), return_status);
   return return_status;
   return -1;
 }
@@ -296,12 +302,14 @@ load (const char *file_name, void (**eip) (void), void **esp)
   char *argv[MAX_ARGV_LEN];
   char *cmd = palloc_get_page(0);
   strlcpy(cmd, file_name, MAX_CMD_LEN);
+  DBG_MSG_USERPROG("[%s] parse %s\n", thread_name(), file_name);
   int argc = userprog_parser(cmd, argv);
   // int j  = 0;
   // while(argv[j] != NULL){
   //   printf("%s\n", argv[j++]);
   // }
   /* Open executable file. */
+  DBG_MSG_USERPROG("[%s] open userprog %s\n", thread_name(), argv[0]);
   file = filesys_open (argv[0]);
   if (file == NULL) 
     {
@@ -311,6 +319,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Deny writing to file */
   file_deny_write(file);
   thread_current()->my_elf = file;
+  DBG_MSG_USERPROG("[%s] verify userprog %s\n", thread_name(), argv[0]);
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -384,6 +393,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
+  DBG_MSG_USERPROG("[%s] set up user stack\n", thread_name());
   if (!setup_stack (esp, argv, argc))
     goto done;
 

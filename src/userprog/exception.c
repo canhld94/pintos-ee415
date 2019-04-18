@@ -127,7 +127,7 @@ kill (struct intr_frame *f)
 static void
 page_fault (struct intr_frame *f) 
 {
-   DBG_MSG("[%s] call page fault\n", thread_name());
+   DBG_MSG_USERPROG("[%s] call page fault\n", thread_name());
   bool not_present;  /* True: not-present page, false: writing r/o page. */
   bool write;        /* True: access was write, false: access was read. */
   bool user;         /* True: access by user, false: access by kernel. */

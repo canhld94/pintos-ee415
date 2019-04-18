@@ -6,7 +6,7 @@
 #ifndef THREADS_THREAD_H
 #define THREADS_THREAD_H
 #define USERPROG
-#define DEBUG 1
+#define DEBUG 0
 #define NOFILE 10
 #include <debug.h>
 #include <list.h>
@@ -16,11 +16,17 @@
 #include "filesys/file.h"
 
 /* Debug  */
-#if(DEBUG > 0)
-  #define DBG_MSG printf
+#if(DEBUG > 3)
+  #define DBG_MSG_THREAD printf
 #else
-  #define DBG_MSG(...) do {} while (0)
-#endif // DEBUG
+  #define DBG_MSG_THREAD(...) do {} while (0)
+#endif 
+
+#if(DEBUG > 2)
+  #define DBG_MSG_USERPROG printf
+#else
+  #define DBG_MSG_USERPROG(...) do {} while (0)
+#endif 
 
 /* States in a thread's life cycle. */
 enum thread_status
