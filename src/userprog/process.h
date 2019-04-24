@@ -1,3 +1,8 @@
+/*  
+  Duc-Canh Le <canhld@kaist.ac.kr>
+  Network and Computing Laboratory
+*/
+
 #ifndef USERPROG_PROCESS_H
 #define USERPROG_PROCESS_H
 
