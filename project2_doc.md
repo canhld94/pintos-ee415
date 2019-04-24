@@ -18,7 +18,7 @@ https://gitlab.com/canhld94/pintos-ee415
 
 >> If you have any preliminary comments on your submission, notes for the
 >> TAs, or extra credit, please give them here.
-I use one day token
+I use two days token
 
 >> Please cite any offline or online sources you consulted while
 >> preparing your submission, other than the Pintos documentation, course
