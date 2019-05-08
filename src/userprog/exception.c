@@ -1,10 +1,18 @@
 #include "userprog/exception.h"
 #include "userprog/syscall.h"
+#include "round.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
+#include "threads/intr-stubs.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
+#include "threads/palloc.h"
+#include "process.h"
+#include "vm/frame.h"
+#include "vm/page.h"
+#include "vm/swap.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -127,7 +135,6 @@ kill (struct intr_frame *f)
 static void
 page_fault (struct intr_frame *f) 
 {
-   DBG_MSG_USERPROG("[%s] call page fault\n", thread_name());
   bool not_present;  /* True: not-present page, false: writing r/o page. */
   bool write;        /* True: access was write, false: access was read. */
   bool user;         /* True: access by user, false: access by kernel. */
@@ -141,7 +148,7 @@ page_fault (struct intr_frame *f)
      [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
      (#PF)". */
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
-
+  DBG_MSG_USERPROG("[%s] call page fault at 0x%x\n", thread_name(), fault_addr);
   /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
   intr_enable ();
@@ -153,15 +160,64 @@ page_fault (struct intr_frame *f)
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
-
-  /* To implement virtual memory, delete the rest of the function
-     body, and replace it with code that brings in the page to
-     which fault_addr refers. */
-//   printf ("Page fault at %p: %s error %s page in %s context.\n",
-//           fault_addr,
-//           not_present ? "not present" : "rights violation",
-//           write ? "writing" : "reading",
-//           user ? "user" : "kernel");
-  kill (f);
+  uint32_t *vpage = (uint32_t *) ROUND_DOWN((uint32_t) fault_addr, PGSIZE);
+  DBG_MSG_VM("[VM: %s] looking for page 0x%x at supp table\n", thread_name(), vpage);
+  struct page *p = page_table_lookup(vpage);
+  if(p != NULL)
+  {
+      // DBG_MSG_VM("[VM: %s] find 0x%x with aux 0x%x\n", thread_name(), vpage, p->aux);
+      if(p->aux == -1) /* Load new page */
+      {
+         // DBG_MSG_VM("[VM: %s] loading new data page at 0x%x\n", thread_name(), vpage);
+         uint32_t *kpage = frame_alloc();
+         if(kpage == NULL || !install_page(vpage, kpage, 1))
+         {
+            DBG_MSG_VM("[VM: %s] full of memory, kill\n", thread_name());
+            kill(f);
+         }
+         // DBG_MSG_VM("[VM: %s] return from interrupt\n", thread_name());
+      }
+      // else if (p->aux == -2)
+      // {
+      //    uint32_t *kpage = frame_alloc();
+      //    if(kpage == NULL || !install_page(vpage, kpage, 1))
+      //    {
+      //       DBG_MSG_VM("[VM: %s] full of memory, kill\n", thread_name());
+      //       kill(f);
+      //    }
+      //    page_table_insert((uint32_t*) ROUND_DOWN((int32_t) f->esp,PGSIZE) - PGSIZE, -2);
+      // }
+      
+      else /* Load from swap */
+      {
+         DBG_MSG_VM("[VM: %s] load 0x%x from swap %d\n", thread_name(), p->vaddr, p->aux);
+         uint32_t *kpage = frame_alloc();
+         if(kpage == NULL || !install_page(vpage, kpage, 1))
+         {
+            DBG_MSG_VM("[VM: %s] full of memory, kill\n", thread_name());
+            kill(f);
+         }
+         swap_in(p->aux, vtop(kpage));
+         /* Update swap tablen (internal) and frame table (done in install page)*/
+      }
+      page_table_remove(p);
+      
+  }
+  else if (fault_addr - f->esp <= PGSIZE ||  f->esp - fault_addr <= PGSIZE) /* Stack growth */
+  {
+      uint32_t *kpage = frame_alloc();
+      if(kpage == NULL || !install_page(vpage, kpage, 1))
+      {
+         DBG_MSG_VM("[VM: %s] full of memory, kill\n", thread_name());
+         kill(f);
+      }
+  }
+  else
+  {
+      DBG_MSG_VM("[VM: %s] call page fault at 0x%x\n", thread_name(), fault_addr);  
+      intr_dump_frame(f);
+      kill(f);
+      // PANIC("PGF");
+  }
 }
 

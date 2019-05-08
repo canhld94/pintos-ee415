@@ -28,6 +28,8 @@
 #include "userprog/gdt.h"
 #include "userprog/syscall.h"
 #include "userprog/tss.h"
+#include "vm/frame.h"
+#include "vm/swap.h"
 #else
 #include "tests/threads/tests.h"
 #endif
@@ -139,6 +141,8 @@ main (void)
 #ifdef USERPROG
   exception_init ();
   syscall_init ();
+  frame_init();
+  swap_init();
 #endif
 
   /* Start thread scheduler and enable interrupts. */
@@ -153,6 +157,10 @@ main (void)
   filesys_init (format_filesys);
 #endif
 
+#ifdef USERPROG
+   swap_init();
+#endif // DEBUG
+
   printf ("Boot complete.\n");
   
 /*  
@@ -163,6 +171,10 @@ main (void)
   run_actions (argv);
 
   /* Finish up. */
+  #ifdef USERPROG
+  // frame_destroy();
+  // swap_destroy();
+  #endif
   shutdown ();
   thread_exit ();
 }

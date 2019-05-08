@@ -710,7 +710,7 @@ thread_schedule_tail (struct thread *prev)
 
 #ifdef USERPROG
   /* Activate the new address space. */
-  process_activate ();
+  if(cur != idle_thread) process_activate ();
 #endif
 
   /* If the thread we switched from is dying, destroy its struct

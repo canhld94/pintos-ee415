@@ -23,6 +23,8 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/synch.h"
+#include "vm/frame.h"
+#include "vm/page.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -74,7 +76,10 @@ process_execute (const char *file_name)
   lock_release(&thread_args->ex_lock);
   DBG_MSG_USERPROG("[%s] get exec signal from child %s\n", thread_name(), file_name);
   if (thread_args->load_status == false)
-    tid = -1;
+    {
+      DBG_MSG_USERPROG("[%s] child load executable file [%s] error\n",thread_name(), file_name);
+      tid = TID_ERROR;
+    }
   palloc_free_page (thread_args); 
   return tid;
 }
@@ -88,6 +93,7 @@ start_process (void *thread_args_)
   DBG_MSG_USERPROG("[%s] trying to get my internal lock \n", thread_name());
   lock_acquire(&thread_current()->internal_lock);
   DBG_MSG_USERPROG("[%s] get my internal lock\n", thread_name());
+  page_table_init();
   struct execution *thread_args = thread_args_;
   char *file_name = thread_args->fn_copy;
   struct intr_frame if_;
@@ -135,6 +141,7 @@ start_process (void *thread_args_)
 int
 process_wait (tid_t child_tid) 
 {
+  DBG_MSG_USERPROG("[%s] Wating for pid %d\n", thread_name(), child_tid);
   /* travel the child list */
   struct list_elem *e = list_begin(&thread_current()->childs);
   struct thread *t = NULL;
@@ -178,6 +185,7 @@ process_exit (void)
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
+  page_table_destroy();
   pd = cur->pagedir;
   if (pd != NULL) 
     {
@@ -308,10 +316,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
   strlcpy(cmd, file_name, MAX_CMD_LEN);
   DBG_MSG_USERPROG("[%s] parse %s\n", thread_name(), file_name);
   int argc = userprog_parser(cmd, argv);
-  // int j  = 0;
-  // while(argv[j] != NULL){
-  //   printf("%s\n", argv[j++]);
-  // }
   /* Open executable file. */
   DBG_MSG_USERPROG("[%s] open userprog %s\n", thread_name(), argv[0]);
   int attempt = 0;
@@ -377,6 +381,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
               uint32_t mem_page = phdr.p_vaddr & ~PGMASK;
               uint32_t page_offset = phdr.p_vaddr & PGMASK;
               uint32_t read_bytes, zero_bytes;
+              DBG_MSG_VM("[VM: %s] loading segment %s at user page 0x%x, fsize of 0x%x and msize of 0x%x\n",thread_name(), writable?"data":"code", mem_page, page_offset + phdr.p_filesz, ROUND_UP(phdr.p_memsz, PGSIZE));
               if (phdr.p_filesz > 0)
                 {
                   /* Normal segment.
@@ -394,10 +399,17 @@ load (const char *file_name, void (**eip) (void), void **esp)
                 }
               if (!load_segment (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable))
-                goto done;
+                                 {
+                                    DBG_MSG_USERPROG("[%s] segment load failed with %s\n",thread_name(), file_name);
+                                    goto done;
+                                 }
+              // DBG_MSG_USERPROG("[%s] loading segment %s at upage 0x%x\n",thread_name(), writable?"data":"code", mem_page);
             }
           else
-            goto done;
+            {
+              DBG_MSG_USERPROG("[%s] segment validate failed with %s\n",thread_name(), file_name);
+              goto done;
+            }
           break;
         }
     }
@@ -436,8 +448,6 @@ userprog_parser(char *cmd, char **argv)
   argv[cnt] = NULL;
   return cnt;
 }
-
-static bool install_page (void *upage, void *kpage, bool writable);
 
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
@@ -514,33 +524,64 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
          and zero the final PAGE_ZERO_BYTES bytes. */
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
-      /* Get a page of memory. */
-      uint8_t *kpage = palloc_get_page (PAL_USER);
-      if (kpage == NULL)
-        return false;
-
-      /* Load this page. */
-      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
+      if(page_read_bytes > 0) /* Load all needed page */
+      {
+        /* Get a page of memory. */
+        uint8_t *kpage = frame_alloc();
+        if (kpage == NULL)
         {
-          palloc_free_page (kpage);
-          return false; 
+          DBG_MSG_VM("[%s - load_segment] cannot allocate page\n",thread_name());
+          return false;
         }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
+        /* Load this page. */
+        if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
+          {
+            frame_free(kpage);
+            DBG_MSG_VM("[VM: %s - load_segment] cannot load segment page\n",thread_name());
+            return false; 
+          }
+        memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
-      /* Add the page to the process's address space. */
-      if (!install_page (upage, kpage, writable)) 
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
-
-      /* Advance. */
+        /* Add the page to the process's address space. */
+        // DBG_MSG_VM("[ VM: %s - load segment] load to upage 0x%x\n",thread_name(), upage);
+        if (!install_page (upage, kpage, writable)) 
+          {
+            frame_free(kpage);
+            DBG_MSG_USERPROG("[%s - load_segment] cannot install new page\n",thread_name());
+            return false; 
+          }
+      }
+      else /* Marked in the supp table that allocate new page is enough */
+      {
+        // DBG_MSG_VM("[VM: %s - load_segment] insert segment page 0x%x to page table\n",thread_name(), upage);
+        page_table_insert(upage, -1);
+      }
+            /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
     }
-  return true;
+    return true;
+}
+
+/* Adds a mapping from user virtual address UPAGE to kernel
+   virtual address KPAGE to the page table.
+   If WRITABLE is true, the user process may modify the page;
+   otherwise, it is read-only.
+   UPAGE must not already be mapped.
+   KPAGE should probably be a page obtained from the user pool
+   with palloc_get_page().
+   Returns true on success, false if UPAGE is already mapped or
+   if memory allocation fails. */
+bool
+install_page (void *upage, void *kpage, bool writable)
+{
+  struct thread *t = thread_current ();
+  frame_table_set(vtop(kpage), upage);
+  /* Verify that there's not already a page at that virtual
+     address, then map our page there. */
+  return (pagedir_get_page (t->pagedir, upage) == NULL
+          && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
 
 /* Create a minimal stack by mapping a zeroed page at the top of
@@ -552,7 +593,7 @@ setup_stack (void **esp, char **argv, int argc)
   uint8_t *kpage;
   bool success = false;
 
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO); /* kpage is a PHYSICAL page */
+  kpage =  frame_alloc(); /* kpage is a PHYSICAL page */
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
@@ -592,29 +633,11 @@ setup_stack (void **esp, char **argv, int argc)
         *(uint32_t *)virtual_esp = 0;
         *esp = virtual_esp;
         // hex_dump((uint32_t)*esp, *esp, (PHYS_BASE - *esp), 1);
+        /* Adding next page of stack to the page table*/
+        // page_table_insert((uint8_t *) ROUND_DOWN((uint32_t) virtual_esp, PGSIZE) - PGSIZE, -2);
       }
       else
-        palloc_free_page (kpage);
+        frame_free(kpage);
     }
   return success;
-}
-
-/* Adds a mapping from user virtual address UPAGE to kernel
-   virtual address KPAGE to the page table.
-   If WRITABLE is true, the user process may modify the page;
-   otherwise, it is read-only.
-   UPAGE must not already be mapped.
-   KPAGE should probably be a page obtained from the user pool
-   with palloc_get_page().
-   Returns true on success, false if UPAGE is already mapped or
-   if memory allocation fails. */
-static bool
-install_page (void *upage, void *kpage, bool writable)
-{
-  struct thread *t = thread_current ();
-
-  /* Verify that there's not already a page at that virtual
-     address, then map our page there. */
-  return (pagedir_get_page (t->pagedir, upage) == NULL
-          && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }

@@ -5,11 +5,12 @@
 
 #ifndef THREADS_THREAD_H
 #define THREADS_THREAD_H
-// #define USERPROG
+#define USERPROG
 #define DEBUG 0
 #define NOFILE 10
 #include <debug.h>
 #include <list.h>
+#include "hash.h"
 #include <stdint.h>
 #include <filesys/filesys.h>
 #include <threads/synch.h>
@@ -27,6 +28,18 @@
 #else
   #define DBG_MSG_USERPROG(...) do {} while (0)
 #endif 
+
+#if(DEBUG > 1)
+  #define DBG_MSG_VM printf
+#else 
+  #define DBG_MSG_VM(...) do{} while (0)
+#endif
+
+#if(DEBUG > 1)
+  #define DBG_MSG_FS printf
+#else 
+  #define DBG_MSG_FS(...) do{} while (0)
+#endif
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -128,6 +141,9 @@ struct thread
     struct lock parrent_lock;           /* My parrent lock */
     int userprog_status;
     struct file *my_elf;
+
+    /* Used in Project 3 - VM */
+    struct hash *supp_table;
 #endif
 
     /* Owned by thread.c. */
