@@ -12,9 +12,9 @@
 #include "userprog/pagedir.h"
 #include "swap.h"
 #include "page.h"
-
+#include "threads/interrupt.h"
 struct _frame frame;
-static uint32_t *frame_to_be_evicted();
+static uint8_t *frame_to_be_evicted();
 
 
 /*
@@ -36,29 +36,26 @@ void frame_init()
 }
 
 /* Frame table manipulation*/
-void frame_table_get(uint32_t *pframe, struct thread **t, uint32_t **upage)
+void frame_table_get(uint8_t *pframe, struct thread **t, uint8_t **upage)
 {
     uint32_t index =  (uint32_t) pframe / PGSIZE - (1024*1024)/PGSIZE - frame.total_frames/2 - 1;
     *t = frame.frame_table[index].thread;
     *upage = frame.frame_table[index].page;
 }
 
-void frame_table_set(uint32_t *pframe, uint32_t *page)
+void frame_table_set(uint8_t *pframe, struct thread *t, uint8_t *page)
 {
     uint32_t index =  (uint32_t) pframe / PGSIZE - (1024*1024)/PGSIZE - frame.total_frames/2 - 1;
     // DBG_MSG_VM("[VM: %s] adding new pages to frame table at %d value 0x%x\n", thread_name(), index, page);
     lock_acquire(&frame.lock);
-    if(page != NULL)
-        frame.frame_table[index].thread = thread_current();
-    else 
-        frame.frame_table[index].thread = NULL;
+    frame.frame_table[index].thread = t;
     frame.frame_table[index].page = page;
     lock_release(&frame.lock);
 }
 
-uint32_t *frame_table_get_pframe(uint32_t index)
+uint8_t *frame_table_get_pframe(uint32_t index)
 {
-    return (uint32_t *) ((index + (1024*1024)/PGSIZE + frame.total_frames/2 + 1)*PGSIZE);
+    return (uint8_t *) ((index + (1024*1024)/PGSIZE + frame.total_frames/2 + 1)*PGSIZE);
 }
 
 /*
@@ -67,11 +64,10 @@ uint32_t *frame_table_get_pframe(uint32_t index)
 void *frame_alloc()
 {
     /* Obtain one page from user pool */
-    uint32_t *kpage = palloc_get_page(PAL_USER|PAL_ZERO);
+    uint8_t *kpage = palloc_get_page(PAL_USER|PAL_ZERO);
     if(kpage != NULL)
     {
     /* Update the frame table entry at pframe */
-        // frame_table_set(vtop(kpage), thread_current());
         return kpage;
     }
     else
@@ -82,21 +78,42 @@ void *frame_alloc()
         {
             return NULL;
         }
-        /* Evic one frame */
-        uint32_t *e_frame = frame_to_be_evicted();
+        /* 
+        Evic one frame 
+        BUG: Should we update the frame first or swap first?
+        */
+        uint8_t *e_frame = frame_to_be_evicted();
         // DBG_MSG_VM("[VM: %s] swap frame 0x%x to swap slot %d\n", thread_name(), e_frame, swap_page);
+        // DBG_MSG_VM("[VM: %s] evicted: %s, 0x%x, 0x%x, %d\n", thread_name(), t->name, upage, e_frame, swap_page);
         swap_out(e_frame, swap_page);
-        /* TODO: Update pagedir table */
+        intr_disable();
         struct thread *t; 
-        uint32_t *upage;
+        uint8_t *upage;
         frame_table_get(e_frame, &t, &upage);
-        // DBG_MSG_VM("[VM: %s] evicted: %s, 0x%x, 0x%x\n", thread_name(), t->name, upage, e_frame);
+        /* TODO: Update pagedir table */
         pagedir_clear_page(t->pagedir, upage);
-        /* Update frame table --> done with install_page */
         /* TODO: Update supp table */
-        page_table_insert(upage, swap_page);
+        page_table_insert(t, upage, swap_page);
+        intr_enable();
+        /* Update frame table and pagedir --> done with install_page */
         return ptov(e_frame);
     }
+}
+
+void frame_table_free(struct thread *t)
+{
+    int i;
+    lock_acquire(&frame.lock);
+    for(i = 0; i < frame.user_frames; i++)
+    {
+        if(frame.frame_table[i].thread == t)
+        {
+            // DBG_MSG_VM("[VM: %s] free frame entry 0x%x\n", thread_name(), frame_table_get_pframe(i));
+            frame.frame_table[i].thread = NULL;
+            frame.frame_table[i].page = NULL;
+        }
+    }
+    lock_release(&frame.lock);
     
 }
 
@@ -105,21 +122,21 @@ void frame_free(void *kpage)
     /* Free the kernel page */
     palloc_free_page(kpage);
     /* Remove the page entry from the frame table */
-    frame_table_set(vtop(kpage), NULL);
+    frame_table_set(vtop(kpage), NULL, NULL);
 }
 
 void frame_destroy()
 {
     int npage = ROUND_UP(init_ram_pages, PGSIZE/sizeof(uint32_t));
-    frame_table_dump();
-    palloc_free_multiple(frame.frame_table, npage / PGSIZE * sizeof(uint32_t));
+    // frame_table_dump();
+    palloc_free_multiple(frame.frame_table, npage * sizeof(struct _frame_table) / PGSIZE);
 }
 
 
-static uint32_t *frame_to_be_evicted()
+static uint8_t *frame_to_be_evicted()
 {
-    static uint32_t i;
-    i += 10;
+    static uint32_t i = 0;
+    i += 11;
     random_init(i%INT32_MAX);
     uint32_t f = random_ulong() % (frame.user_frames - 1);
     return frame_table_get_pframe(f);

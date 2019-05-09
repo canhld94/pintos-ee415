@@ -161,41 +161,29 @@ page_fault (struct intr_frame *f)
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
-  uint32_t *vpage = (uint32_t *) ROUND_DOWN((uint32_t) fault_addr, PGSIZE);
+  uint8_t *vpage = (uint8_t *) ROUND_DOWN((uint32_t) fault_addr, PGSIZE);
   if(vpage == NULL || vpage >= PHYS_BASE) /* Illegal address */
   {
       // intr_dump_frame(f);  
       kill(f);
   }
 //   DBG_MSG_VM("[VM: %s] looking for page 0x%x at supp table\n", thread_name(), vpage);
-  struct page *p = page_table_lookup(vpage);
+  struct page *p = page_table_lookup(thread_current(), vpage);
   if(p != NULL)
   {
       // DBG_MSG_VM("[VM: %s] find 0x%x with aux 0x%x\n", thread_name(), vpage, p->aux);
-      if(p->aux == -1) /* Load new page */
+      uint8_t *kpage = frame_alloc();
+      if(kpage == NULL || !install_page(vpage, kpage, 1))
       {
-         // DBG_MSG_VM("[VM: %s] loading new data page at 0x%x\n", thread_name(), vpage);
-         uint32_t *kpage = frame_alloc();
-         if(kpage == NULL || !install_page(vpage, kpage, 1))
-         {
-            DBG_MSG_VM("[VM: %s] full of memory, kill\n", thread_name());
-            kill(f);
-         }
-         // DBG_MSG_VM("[VM: %s] return from interrupt\n", thread_name());
+         DBG_MSG_VM("[VM: %s] full of memory, kill\n", thread_name());
+         kill(f);
       }
-      else /* Load from swap */
+      if(p->aux != -1) /* Not load new page --> swap */
       {
-         DBG_MSG_VM("[VM: %s] load 0x%x from swap %d\n", thread_name(), p->vaddr, p->aux);
-         uint32_t *kpage = frame_alloc();
-         if(kpage == NULL || !install_page(vpage, kpage, 1))
-         {
-            DBG_MSG_VM("[VM: %s] full of memory, kill\n", thread_name());
-            kill(f);
-         }
+         // DBG_MSG_VM("[VM: %s] load 0x%x from swap %d\n", thread_name(), p->vaddr, p->aux);
          swap_in(p->aux, vtop(kpage));
-         /* Update swap tablen (internal) and frame table (done in install page)*/
       }
-      page_table_remove(p);
+      page_table_remove(thread_current(), p);
       goto done;   
   }
   else if ((fault_addr - f->esp < PGSIZE && f->esp - fault_addr < PGSIZE) ) /* Stack growth */
@@ -205,14 +193,14 @@ page_fault (struct intr_frame *f)
       {
          if(pagedir_get_page(thread_current()->pagedir ,vpage) == NULL)
          {
-            uint32_t *kpage = frame_alloc();
+            uint8_t *kpage = frame_alloc();
             if(kpage == NULL || !install_page(vpage, kpage, 1))
             {
                DBG_MSG_VM("[VM: %s] full of memory, kill\n", thread_name());
                kill(f);
             }
          }
-         vpage += PGSIZE/sizeof(uint32_t);
+         vpage += PGSIZE;
       }
       goto done;
   }

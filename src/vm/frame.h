@@ -6,7 +6,7 @@
 struct _frame_table
 {
     struct thread *thread;
-    uint32_t *page;
+    uint8_t *page;
 };
 
 struct _frame
@@ -41,9 +41,10 @@ Only the supp table is local (thread scope)
 void frame_init();
 void *frame_alloc();
 void frame_free(void *);
-void frame_table_get(uint32_t *pframe, struct thread **t, uint32_t **page);
-void frame_table_set(uint32_t *pframe, uint32_t *page);
-uint32_t *frame_table_get_pframe(uint32_t index);
+void frame_table_get(uint8_t *pframe, struct thread **t, uint8_t **page);
+void frame_table_set(uint8_t *pframe, struct thread *t, uint8_t *page);
+void frame_table_free(struct thread *t);
+uint8_t *frame_table_get_pframe(uint32_t index);
 void frame_destroy();
 void frame_table_dump();
 

@@ -25,6 +25,7 @@
 #include "threads/synch.h"
 #include "vm/frame.h"
 #include "vm/page.h"
+#include "vm/swap.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -93,7 +94,7 @@ start_process (void *thread_args_)
   DBG_MSG_USERPROG("[%s] trying to get my internal lock \n", thread_name());
   lock_acquire(&thread_current()->internal_lock);
   DBG_MSG_USERPROG("[%s] get my internal lock\n", thread_name());
-  page_table_init();
+  page_table_init(thread_current());
   struct execution *thread_args = thread_args_;
   char *file_name = thread_args->fn_copy;
   struct intr_frame if_;
@@ -182,10 +183,15 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  /* Free the swap table */
+  swap_free(cur);
+  /* Free the frame table */
+  frame_table_free(cur);
+  /* Free the supplemental table */
+  page_table_destroy(thread_current());
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
-  page_table_destroy();
   pd = cur->pagedir;
   if (pd != NULL) 
     {
@@ -554,7 +560,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       else /* Marked in the supp table that allocate new page is enough */
       {
         // DBG_MSG_VM("[VM: %s - load_segment] insert segment page 0x%x to page table\n",thread_name(), upage);
-        page_table_insert(upage, -1);
+        page_table_insert(thread_current(), upage, -1);
       }
             /* Advance. */
       read_bytes -= page_read_bytes;
@@ -577,7 +583,7 @@ bool
 install_page (void *upage, void *kpage, bool writable)
 {
   struct thread *t = thread_current ();
-  frame_table_set(vtop(kpage), upage);
+  frame_table_set(vtop(kpage), t, upage);
   /* Verify that there's not already a page at that virtual
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
@@ -634,7 +640,6 @@ setup_stack (void **esp, char **argv, int argc)
         *esp = virtual_esp;
         // hex_dump((uint32_t)*esp, *esp, (PHYS_BASE - *esp), 1);
         /* Adding next page of stack to the page table*/
-        // page_table_insert((uint8_t *) ROUND_DOWN((uint32_t) virtual_esp, PGSIZE) - PGSIZE, -2);
       }
       else
         frame_free(kpage);

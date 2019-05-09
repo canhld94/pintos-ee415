@@ -172,8 +172,8 @@ main (void)
 
   /* Finish up. */
   #ifdef USERPROG
-  // frame_destroy();
-  // swap_destroy();
+  frame_destroy();
+  swap_destroy();
   #endif
   shutdown ();
   thread_exit ();

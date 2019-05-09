@@ -1,5 +1,4 @@
 #include "page.h"
-#include "threads/thread.h"
 #include "threads/malloc.h"
 #include "threads/vaddr.h"
 #include "round.h"
@@ -27,42 +26,40 @@ static void page_destructor(struct hash_elem *e, void *aux UNUSED)
     free(p);
 }
 
-void page_table_init()
+void page_table_init(struct thread *t)
 {
-    DBG_MSG_VM("[VM: %s] Init spt\n", thread_name());
-    thread_current()->supp_table = malloc(sizeof(struct hash));
-    hash_init(thread_current()->supp_table, page_hash, page_less, NULL);
+    DBG_MSG_VM("[VM: %s] Init spt of %s\n", thread_name(),t->name);
+    t->supp_table = malloc(sizeof(struct hash));
+    hash_init(t->supp_table, page_hash, page_less, NULL);
 }
 
-void page_table_insert(const uint32_t *address, uint32_t * aux)
+void page_table_insert(struct thread *t, const uint8_t *address, uint8_t * aux)
 {
     struct page *p = malloc(sizeof(struct page));
     p->vaddr = address;
     p->aux = aux;
     // DBG_MSG_VM("[VM: %s] Insert 0x%x and 0x%x to spt\n", thread_name(), p->vaddr, p->aux);
-    struct hash_elem *e = hash_insert(thread_current()->supp_table, &p->hash_elem);
+    struct hash_elem *e = hash_insert(t->supp_table, &p->hash_elem);
 }
 
-void page_table_remove(struct page *p)
+void page_table_remove(struct thread *t, struct page *p)
 {
-    hash_delete(thread_current()->supp_table, &p->hash_elem);
+    ASSERT(hash_delete(t->supp_table, &p->hash_elem) == p);
     free(p);
 }
 
-struct page *page_table_lookup(const uint32_t *address)
+struct page *page_table_lookup(struct thread *t, const uint8_t *address)
 {
     struct page p;
     struct hash_elem *e = NULL;
     p.vaddr = address;
-    // DBG_MSG_VM("[VM: %s] hash table: 0x%x\n", thread_name(), thread_current()->supp_table);
-    e = hash_find(thread_current()->supp_table, &p.hash_elem);
-    // DBG_MSG_VM("[VM: %s] finding addr 0x%x on return 0x%x\n", thread_name(), p.vaddr, e);
+    e = hash_find(t->supp_table, &p.hash_elem);
     return e != NULL ? hash_entry(e, struct page, hash_elem) : NULL;
 }
 
-void page_table_destroy()
+void page_table_destroy(struct thread *t)
 {
     DBG_MSG_VM("[VM: %s] destroy spt\n", thread_name());
-    hash_destroy(thread_current()->supp_table, page_destructor);
-    free(thread_current()->supp_table);
+    hash_destroy(t->supp_table, page_destructor);
+    free(t->supp_table);
 }
