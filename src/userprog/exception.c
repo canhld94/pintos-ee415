@@ -1,5 +1,6 @@
 #include "userprog/exception.h"
 #include "userprog/syscall.h"
+#include "userprog/pagedir.h"
 #include "round.h"
 #include <inttypes.h>
 #include <stdio.h>
@@ -148,7 +149,7 @@ page_fault (struct intr_frame *f)
      [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
      (#PF)". */
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
-  DBG_MSG_USERPROG("[%s] call page fault at 0x%x\n", thread_name(), fault_addr);
+//   DBG_MSG_USERPROG("[%s] call page fault at 0x%x\n", thread_name(), fault_addr);
   /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
   intr_enable ();
@@ -161,7 +162,12 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
   uint32_t *vpage = (uint32_t *) ROUND_DOWN((uint32_t) fault_addr, PGSIZE);
-  DBG_MSG_VM("[VM: %s] looking for page 0x%x at supp table\n", thread_name(), vpage);
+  if(vpage == NULL || vpage >= PHYS_BASE) /* Illegal address */
+  {
+      // intr_dump_frame(f);  
+      kill(f);
+  }
+//   DBG_MSG_VM("[VM: %s] looking for page 0x%x at supp table\n", thread_name(), vpage);
   struct page *p = page_table_lookup(vpage);
   if(p != NULL)
   {
@@ -177,17 +183,6 @@ page_fault (struct intr_frame *f)
          }
          // DBG_MSG_VM("[VM: %s] return from interrupt\n", thread_name());
       }
-      // else if (p->aux == -2)
-      // {
-      //    uint32_t *kpage = frame_alloc();
-      //    if(kpage == NULL || !install_page(vpage, kpage, 1))
-      //    {
-      //       DBG_MSG_VM("[VM: %s] full of memory, kill\n", thread_name());
-      //       kill(f);
-      //    }
-      //    page_table_insert((uint32_t*) ROUND_DOWN((int32_t) f->esp,PGSIZE) - PGSIZE, -2);
-      // }
-      
       else /* Load from swap */
       {
          DBG_MSG_VM("[VM: %s] load 0x%x from swap %d\n", thread_name(), p->vaddr, p->aux);
@@ -201,23 +196,35 @@ page_fault (struct intr_frame *f)
          /* Update swap tablen (internal) and frame table (done in install page)*/
       }
       page_table_remove(p);
-      
+      goto done;   
   }
-  else if (fault_addr - f->esp <= PGSIZE ||  f->esp - fault_addr <= PGSIZE) /* Stack growth */
+  else if ((fault_addr - f->esp < PGSIZE && f->esp - fault_addr < PGSIZE) ) /* Stack growth */
   {
-      uint32_t *kpage = frame_alloc();
-      if(kpage == NULL || !install_page(vpage, kpage, 1))
+      DBG_MSG_VM("[VM: %s] stack growth\n", thread_name());
+      while (vpage < PHYS_BASE)
       {
-         DBG_MSG_VM("[VM: %s] full of memory, kill\n", thread_name());
-         kill(f);
+         if(pagedir_get_page(thread_current()->pagedir ,vpage) == NULL)
+         {
+            uint32_t *kpage = frame_alloc();
+            if(kpage == NULL || !install_page(vpage, kpage, 1))
+            {
+               DBG_MSG_VM("[VM: %s] full of memory, kill\n", thread_name());
+               kill(f);
+            }
+         }
+         vpage += PGSIZE/sizeof(uint32_t);
       }
+      goto done;
   }
   else
   {
       DBG_MSG_VM("[VM: %s] call page fault at 0x%x\n", thread_name(), fault_addr);  
-      intr_dump_frame(f);
+      // intr_dump_frame(f);
       kill(f);
       // PANIC("PGF");
   }
+
+  done:
+   return;
 }
 

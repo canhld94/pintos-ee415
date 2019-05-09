@@ -39,6 +39,19 @@ syscall_init (void)
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
+void exit (int status)
+{
+  DBG_MSG_USERPROG("[%s] calls exit\n", thread_name());
+  char thread_full_name[128];
+  strlcpy(thread_full_name, thread_name(), 128);
+  char *process_name, *save_prt;
+  process_name = strtok_r(thread_full_name, " ", &save_prt);
+  printf("%s: exit(%d)\n", process_name, status);
+  thread_current()->userprog_status = status;
+  thread_exit();
+}
+
+
 static void
 syscall_handler (struct intr_frame *f) 
 {
@@ -46,10 +59,11 @@ syscall_handler (struct intr_frame *f)
   // intr_dump_frame (f);
   // debug_backtrace();
   char *esp = f->esp;
-  int syscall = TO_ARG(esp,0), arg0 = TO_ARG(esp, 1), arg1 = TO_ARG(esp, 2), arg2 = TO_ARG(esp, 3);
+  uint32_t syscall = TO_ARG(esp,0), arg0 = TO_ARG(esp, 1), arg1 = TO_ARG(esp, 2), arg2 = TO_ARG(esp, 3);
   /* Check memory access */
-  if(esp >= PHYS_BASE || arg0 >= PHYS_BASE || arg1 >= PHYS_BASE || arg2 >= PHYS_BASE)
+  if(esp >= PHYS_BASE - 4)
   {
+    // intr_dump_frame (f);
     exit(-1);
   }
   int ret_val;
@@ -107,18 +121,6 @@ static void halt (void)
   shutdown_power_off();
 }
 
-void exit (int status)
-{
-  DBG_MSG_USERPROG("[%s] calls exit\n", thread_name());
-  char thread_full_name[128];
-  strlcpy(thread_full_name, thread_name(), 128);
-  char *process_name, *save_prt;
-  process_name = strtok_r(thread_full_name, " ", &save_prt);
-  printf("%s: exit(%d)\n", process_name, status);
-  thread_current()->userprog_status = status;
-  thread_exit();
-}
-
 static pid_t exec (const char *file)
 {
     DBG_MSG_USERPROG("[%s] calls exec %s \n", thread_name(), file);
@@ -139,7 +141,7 @@ static int wait (pid_t p)
 
 static bool create (const char *file, unsigned initial_size)
 {
-  DBG_MSG_USERPROG("[%s] calls open %s\n", thread_name(), file);
+  DBG_MSG_USERPROG("[%s] calls create %s\n", thread_name(), file);
   if(file == NULL || !*file)
   {
     exit(-1);
@@ -169,7 +171,18 @@ static int open (const char *file)
   {
     return -1;
   }
-  struct file *tmp = filesys_open(file);   /* Open file */
+  struct file *tmp;
+  uint32_t attemp = 0;
+  while(attemp < 5)
+  {
+    tmp = filesys_open(file);   /* Open file */
+    if(tmp != NULL) break;
+    else 
+    {
+      thread_sleep(2);
+      attemp++;
+    }
+  }
   if(tmp == NULL) return -1;  /* If failed, return -1 */
   DBG_MSG_USERPROG("[%s] filesys_open %s success\n", thread_name(), file);
   /* If success find the first index that ofile[index] = NULL
@@ -206,7 +219,7 @@ static int filesize (int fd)
 
 static int read (int fd, void *buffer, unsigned length)
 {
-  if(buffer == NULL || fd < 0)
+  if(buffer == NULL || fd < 0 || buffer >= PHYS_BASE)
   {
     exit(-1);
   }
@@ -227,7 +240,7 @@ static int read (int fd, void *buffer, unsigned length)
 
 static int write (int fd, const void *buffer, unsigned length)
 {
-  if(buffer == NULL || fd < 0)
+  if(buffer == NULL || fd < 0 || buffer >= PHYS_BASE)
   {
     exit(-1);
   }
@@ -298,6 +311,7 @@ static void close (int fd)
     case STDOUT_FILENO: /* stdout */
       exit(-1);
     default:
+      DBG_MSG_USERPROG("[%s] calls close to %d\n", thread_name(), fd);
       if(thread_current()->ofile[fd - 2] == NULL) /* Didn't open */
         return -1;
       file_close(thread_current()->ofile[fd - 2]);

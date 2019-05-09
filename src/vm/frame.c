@@ -32,7 +32,7 @@ void frame_init()
     frame.total_frames = free_pages;
     size_t bm_pages = DIV_ROUND_UP (bitmap_buf_size (frame.total_frames/2), PGSIZE);
     frame.user_frames = frame.total_frames/2 - bm_pages;
-    DBG_MSG_VM("[VM: %s] frame table init with %d frames and %d entries\n", thread_name(), npage, frame.total_frames);
+    DBG_MSG_VM("[VM: %s] frame table init with %d frames and %d entries\n", thread_name(), npage, frame.user_frames);
 }
 
 /* Frame table manipulation*/
@@ -90,7 +90,7 @@ void *frame_alloc()
         struct thread *t; 
         uint32_t *upage;
         frame_table_get(e_frame, &t, &upage);
-        DBG_MSG_VM("[VM: %s] evicted: %s, 0x%x, 0x%x\n", thread_name(), t->name, upage, e_frame);
+        // DBG_MSG_VM("[VM: %s] evicted: %s, 0x%x, 0x%x\n", thread_name(), t->name, upage, e_frame);
         pagedir_clear_page(t->pagedir, upage);
         /* Update frame table --> done with install_page */
         /* TODO: Update supp table */

@@ -39,7 +39,7 @@ void page_table_insert(const uint32_t *address, uint32_t * aux)
     struct page *p = malloc(sizeof(struct page));
     p->vaddr = address;
     p->aux = aux;
-    DBG_MSG_VM("[VM: %s] Insert 0x%x and 0x%x to spt\n", thread_name(), p->vaddr, p->aux);
+    // DBG_MSG_VM("[VM: %s] Insert 0x%x and 0x%x to spt\n", thread_name(), p->vaddr, p->aux);
     struct hash_elem *e = hash_insert(thread_current()->supp_table, &p->hash_elem);
 }
 
