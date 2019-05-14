@@ -187,6 +187,7 @@ page_fault (struct intr_frame *f)
       {
          if((uint32_t) p->vaddr & PTE_AVL) // mmap page
          {
+            DBG_MSG_VM("[VM: %s] load 0x%x from mmap %d\n", thread_name(), p->vaddr, p->aux);
             struct openning_file *f = &thread_current()->ofile[(uint32_t) p->aux - 2];
             uint32_t file_offset = vpage - f->mmap_start;
             // read from file

@@ -19,6 +19,7 @@
 #include "filesys/file.h"
 #include "userprog/pagedir.h"
 #include "vm/page.h"
+#include "vm/frame.h"
 #include "round.h"
 
 static void syscall_handler (struct intr_frame *);
@@ -372,11 +373,19 @@ static void munmap(mmapid_t mapping)
   off_t file_offset = 0;
   for(a = f->mmap_start; a < f->mmap_end ; a += PGSIZE)
   {
-    if(pagedir_is_dirty(thread_current()->pagedir, a)) // is dirty
+    k = pagedir_get_page(thread_current()->pagedir, a);
+    if(k == NULL) // not yet accessed
     {
-      file_seek(f->file, file_offset);
+      struct page *p = page_table_lookup(thread_current(), a);
+      ASSERT(p != NULL);
+      page_table_remove(thread_current(), p);
+    }
+    else if(pagedir_is_dirty(thread_current()->pagedir, a)) // is dirty
+    {
       off_t written = file_write_at(f->file, a, PGSIZE, file_offset);
       DBG_MSG_VM("[VM:%s]write %d bytes to mmap file at 0x%x\n", thread_name(), written, a);
+      frame_free(k);
+      pagedir_clear_page(thread_current()->pagedir, a);
     }
     file_offset += PGSIZE;
   }
