@@ -10,6 +10,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/palloc.h"
+#include "threads/pte.h"
 #include "process.h"
 #include "vm/frame.h"
 #include "vm/page.h"
@@ -178,10 +179,30 @@ page_fault (struct intr_frame *f)
          DBG_MSG_VM("[VM: %s] full of memory, kill\n", thread_name());
          kill(f);
       }
-      if(p->aux != -1) /* Not load new page --> swap */
+      if(p->aux == -1) /* load new page from elf --> do nothing */
       {
-         // DBG_MSG_VM("[VM: %s] load 0x%x from swap %d\n", thread_name(), p->vaddr, p->aux);
-         swap_in(p->aux, vtop(kpage));
+         // DBG_MSG_VM("[VM: %s] load 0x%x from elf %d\n", thread_name(), p->vaddr, p->aux);
+      }
+      else /* Swap page or mmap page, detect by the bit 9-11 in page */
+      {
+         if((uint32_t) p->vaddr & PTE_AVL) // mmap page
+         {
+            struct openning_file *f = &thread_current()->ofile[(uint32_t) p->aux - 2];
+            uint32_t file_offset = vpage - f->mmap_start;
+            // read from file
+            file_seek(f->file, file_offset);
+            off_t read_bytes = file_read(f->file, kpage, PGSIZE);
+            if(read_bytes < PGSIZE)
+            {
+               memset(kpage + read_bytes, kpage + PGSIZE, 0);
+            }
+         }
+         else
+         {
+            // DBG_MSG_VM("[VM: %s] load 0x%x from swap %d\n", thread_name(), p->vaddr, p->aux);
+            swap_in(p->aux, vtop(kpage));
+         }
+         
       }
       page_table_remove(thread_current(), p);
       goto done;   

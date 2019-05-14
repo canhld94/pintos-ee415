@@ -387,7 +387,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
               uint32_t mem_page = phdr.p_vaddr & ~PGMASK;
               uint32_t page_offset = phdr.p_vaddr & PGMASK;
               uint32_t read_bytes, zero_bytes;
-              DBG_MSG_VM("[VM: %s] loading segment %s at user page 0x%x, fsize of 0x%x and msize of 0x%x\n",thread_name(), writable?"data":"code", mem_page, page_offset + phdr.p_filesz, ROUND_UP(phdr.p_memsz, PGSIZE));
+              // DBG_MSG_VM("[VM: %s] loading segment %s at user page 0x%x, fsize of 0x%x and msize of 0x%x\n",thread_name(), writable?"data":"code", mem_page, page_offset + phdr.p_filesz, ROUND_UP(phdr.p_memsz, PGSIZE));
               if (phdr.p_filesz > 0)
                 {
                   /* Normal segment.

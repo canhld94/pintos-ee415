@@ -269,6 +269,15 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
+  /* Init the file descriptor array */
+  t->ofile = palloc_get_page(0);
+  int i;
+  for (i = 0; i < NOFILE; i++)
+  {
+    t->ofile[i].file = NULL;
+    t->ofile[i].mmap_start = NULL;
+    t->ofile[i].mmap_end = NULL;
+  }
     /* Add to run queue. */
   thread_unblock (t);
   return tid;
@@ -634,12 +643,6 @@ init_thread (struct thread *t, const char *name, int priority)
     t->parrent = thread_current();
     list_push_back(&thread_current()->childs, &t->child_elem);
     lock_acquire(&t->parrent_lock);
-  }
-  /* Init the file descriptor array */
-  int i;
-  for (i = 0; i < NOFILE; i++)
-  {
-    t->ofile[i] = NULL;
   }
   t->my_elf = NULL;
   #endif // USERPROG

@@ -10,12 +10,16 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/pte.h"
 #include "devices/shutdown.h"
 #include "lib/kernel/stdio.h"
 #include <string.h>
 #include <userprog/process.h>
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "userprog/pagedir.h"
+#include "vm/page.h"
+#include "round.h"
 
 static void syscall_handler (struct intr_frame *);
 static void halt (void) NO_RETURN;
@@ -30,6 +34,8 @@ static int write (int fd, const void *buffer, unsigned length);
 static void seek (int fd, unsigned position);
 static unsigned tell (int fd);
 static void close (int fd);
+static mmapid_t mmap(int fd, uint8_t *vaddr);
+static void munmap(mmapid_t mapping);
 
 #define TO_ARG(ESP, X) (*(int *)(ESP + 4*X))
 
@@ -108,6 +114,12 @@ syscall_handler (struct intr_frame *f)
       break;
     case SYS_CLOSE:                  /* Close a file. */
       close(arg0);
+      break;
+    case SYS_MMAP:
+      ret_val = mmap(arg0, arg1);
+      break;
+    case SYS_MUNMAP:
+      munmap(arg0);
       break;
     default:
       break;
@@ -188,12 +200,12 @@ static int open (const char *file)
   /* If success find the first index that ofile[index] = NULL
      and return index + 2 */
   int i = 0;
-  while(i < NOFILE && thread_current()->ofile[i] != NULL)
+  while(i < NOFILE && thread_current()->ofile[i].file != NULL)
   {
     i++;
   }
   if(i == NOFILE) return -1; /* excess number of opened file */
-  thread_current()->ofile[i] = tmp;
+  thread_current()->ofile[i].file = tmp;
   DBG_MSG_USERPROG("[%s] open %s return %d\n", thread_name(), file, i + 2);
   return i + 2; 
 }
@@ -212,7 +224,7 @@ static int filesize (int fd)
     case STDOUT_FILENO: /* stdout */
       exit(-1);
     default:
-      return(file_length(thread_current()->ofile[fd - 2]));
+      return(file_length(thread_current()->ofile[fd - 2].file));
       break;
   }
 }
@@ -232,8 +244,8 @@ static int read (int fd, void *buffer, unsigned length)
       exit(-1);
     default:
       DBG_MSG_USERPROG("[%s] calls read %d bytes from %d\n", thread_name(), length, fd);
-      ASSERT(thread_current()->ofile[fd - 2] != NULL);
-      return file_read(thread_current()->ofile[fd - 2], buffer, length);
+      ASSERT(thread_current()->ofile[fd - 2].file != NULL);
+      return file_read(thread_current()->ofile[fd - 2].file, buffer, length);
       break;
   }
 }
@@ -254,7 +266,7 @@ static int write (int fd, const void *buffer, unsigned length)
       break;
     default:
       DBG_MSG_USERPROG("[%s] calls write %d bytes to %d\n", thread_name(), length, fd);
-      return file_write(thread_current()->ofile[fd - 2], buffer, length);
+      return file_write(thread_current()->ofile[fd - 2].file, buffer, length);
       break;
   }
   return 0;   
@@ -274,7 +286,7 @@ static void seek (int fd, unsigned position)
     case STDOUT_FILENO: /* stdout */
       exit(-1);
     default:
-      file_seek(thread_current()->ofile[fd - 2], position);
+      file_seek(thread_current()->ofile[fd - 2].file, position);
       break;
   }
 }
@@ -293,7 +305,7 @@ static unsigned tell (int fd)
     case STDOUT_FILENO: /* stdout */
       exit(-1);
     default:
-      return file_tell(thread_current()->ofile[fd - 2]);
+      return file_tell(thread_current()->ofile[fd - 2].file);
       break;
   }
 }
@@ -312,10 +324,64 @@ static void close (int fd)
       exit(-1);
     default:
       DBG_MSG_USERPROG("[%s] calls close to %d\n", thread_name(), fd);
-      if(thread_current()->ofile[fd - 2] == NULL) /* Didn't open */
+      if(thread_current()->ofile[fd - 2].file == NULL) /* Didn't open */
         return -1;
-      file_close(thread_current()->ofile[fd - 2]);
-      thread_current()->ofile[fd - 2] = NULL;
+      file_close(thread_current()->ofile[fd - 2].file);
+      thread_current()->ofile[fd - 2].file = NULL;
       break;
   }
+}
+static bool is_valid_mmap_vaddr(void *vaddr);
+/*
+map an opened file fd to the address vaddr
+--> adding page at vaddr to the supplement page table
+*/
+static mmapid_t mmap(int fd, uint8_t *vaddr)
+{
+  // Valid address
+  if(!is_valid_mmap_vaddr(vaddr))
+    return -1;
+  // Valid file
+  if(fd <= STDOUT_FILENO || fd >= NOFILE || filesize(fd) == 0)
+    return -1;
+  // Goto the file array
+  struct openning_file *f = &thread_current()->ofile[fd - 2];
+  if(f->file == NULL) return -1;
+  f->mmap_start = vaddr;
+  f->mmap_end = vaddr + ROUND_UP((uint32_t)vaddr, PGSIZE);
+  // Add the page to the supplement table;
+  uint8_t *a;
+  for(a = f->mmap_start; a < f->mmap_end ; a += PGSIZE)
+  {
+    a = (uint32_t) a | PTE_AVL;
+    page_table_insert(thread_current(), a, fd);
+  }
+  return fd;
+
+}
+
+static void munmap(mmapid_t mapping)
+{
+
+}
+
+static bool is_valid_mmap_vaddr(void *vaddr)
+{
+  // Not NULL
+  if(vaddr == NULL)
+    return false;
+  // Not a kernel address space
+  if(is_kernel_vaddr(vaddr)) 
+    return false;
+  // Must be align
+  if((uint32_t) vaddr % 4096 != 0) 
+    return false;
+  // Must not be mapped
+  if(pagedir_get_page(thread_current()->pagedir, vaddr) != NULL) 
+    return false;
+  // Must not in the supp table
+  if(page_table_lookup(thread_current(), vaddr) != NULL)
+    return false;
+  // Pass all
+  return true;
 }

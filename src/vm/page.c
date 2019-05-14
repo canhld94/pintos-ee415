@@ -2,6 +2,7 @@
 #include "threads/malloc.h"
 #include "threads/vaddr.h"
 #include "round.h"
+#include "threads/pte.h"
 static unsigned page_hash (const struct hash_elem *p_, void *aux UNUSED);
 static bool page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED);
 static void page_destructor(struct hash_elem *e, void *aux UNUSED);
@@ -52,8 +53,13 @@ struct page *page_table_lookup(struct thread *t, const uint8_t *address)
 {
     struct page p;
     struct hash_elem *e = NULL;
-    p.vaddr = address;
+    p.vaddr = (uint32_t) address;
     e = hash_find(t->supp_table, &p.hash_elem);
+    if(e == NULL)
+    {
+        p.vaddr = (uint32_t) address | PTE_AVL;
+        e = hash_find(t->supp_table, &p.hash_elem);
+    }
     return e != NULL ? hash_entry(e, struct page, hash_elem) : NULL;
 }
 

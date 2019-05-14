@@ -82,21 +82,23 @@ void *frame_alloc()
         Evic one frame 
         BUG: Should we update the frame first or swap first?
         */
-        uint8_t *e_frame = frame_to_be_evicted();
-        // DBG_MSG_VM("[VM: %s] swap frame 0x%x to swap slot %d\n", thread_name(), e_frame, swap_page);
-        // DBG_MSG_VM("[VM: %s] evicted: %s, 0x%x, 0x%x, %d\n", thread_name(), t->name, upage, e_frame, swap_page);
-        swap_out(e_frame, swap_page);
-        intr_disable();
         struct thread *t; 
         uint8_t *upage;
-        frame_table_get(e_frame, &t, &upage);
-        /* TODO: Update pagedir table */
-        pagedir_clear_page(t->pagedir, upage);
-        /* TODO: Update supp table */
+        uint8_t *pframe = frame_to_be_evicted();
+        frame_table_get(pframe, &t, &upage);
+        ASSERT(upage != NULL);
+        DBG_MSG_VM("[VM: %s] swap frame 0x%x to swap slot %d entries %s\n", thread_name(), pframe, swap_page, t->name);
+        // DBG_MSG_VM("[VM: %s] evicted: %s, 0x%x, 0x%x, %d\n", thread_name(), t->name, upage, e_frame, swap_page);
+        swap_out(pframe, swap_page);
+        enum intr_level old_level = intr_disable();
         page_table_insert(t, upage, swap_page);
-        intr_enable();
+        /* TODO: Update pagedir table */
+        /* TODO: Update supp table */
+        pagedir_clear_page(t->pagedir, upage);
         /* Update frame table and pagedir --> done with install_page */
-        return ptov(e_frame);
+        frame_table_set(pframe, thread_current(), NULL);
+        intr_set_level(old_level);
+        return ptov(pframe);
     }
 }
 
@@ -114,7 +116,6 @@ void frame_table_free(struct thread *t)
         }
     }
     lock_release(&frame.lock);
-    
 }
 
 void frame_free(void *kpage)
@@ -135,10 +136,15 @@ void frame_destroy()
 
 static uint8_t *frame_to_be_evicted()
 {
-    static uint32_t i = 0;
+    static uint32_t i = 0, f;
     i += 11;
     random_init(i%INT32_MAX);
-    uint32_t f = random_ulong() % (frame.user_frames - 1);
+    gen:
+    f = random_ulong() % (frame.user_frames - 1);
+    // if(pagedir_is_dirty(frame.frame_table[f].thread->pagedir, frame.frame_table[f].page))
+    // {
+    //     goto gen;
+    // }
     return frame_table_get_pframe(f);
 }
 

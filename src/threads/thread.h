@@ -6,8 +6,8 @@
 #ifndef THREADS_THREAD_H
 #define THREADS_THREAD_H
 #define USERPROG
-#define DEBUG 0
-#define NOFILE 10
+#define DEBUG 2
+#define NOFILE 256
 #include <debug.h>
 #include <list.h>
 #include "hash.h"
@@ -61,6 +61,13 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+/* An opened file */
+struct openning_file
+{
+  struct file *file;
+  uint8_t *mmap_start;
+  uint8_t *mmap_end;
+};
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -136,7 +143,7 @@ struct thread
     struct thread *parrent;             /* Parrent of this process */
     struct list childs;                 /* Childs of this process */
     struct list_elem child_elem;        /* List element for child */
-    struct file *ofile[NOFILE];
+    struct openning_file *ofile;
     struct lock internal_lock;          /* My own lock */
     struct lock parrent_lock;           /* My parrent lock */
     int userprog_status;

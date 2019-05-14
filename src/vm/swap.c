@@ -33,13 +33,6 @@ void swap_init()
 */
 void swap_out(uint8_t *pframe, uint32_t swap_index)
 {
-    /* Write evicted frame to sector */
-    int write = 0, sector = swap_index * PGSIZE / BLOCK_SECTOR_SIZE;
-    while(write < PGSIZE){
-        block_write(swap.block_sw, sector, ptov(pframe) + write);
-        write += BLOCK_SECTOR_SIZE;
-        sector++;
-    }
     /* Update the swap table */
     struct thread *t;
     uint8_t *upage;
@@ -47,6 +40,13 @@ void swap_out(uint8_t *pframe, uint32_t swap_index)
     lock_acquire(&swap.lock);
     swap.sw_table[swap_index] = t;
     lock_release(&swap.lock);
+    /* Write evicted frame to sector */
+    int write = 0, sector = swap_index * PGSIZE / BLOCK_SECTOR_SIZE;
+    while(write < PGSIZE){
+        block_write(swap.block_sw, sector, ptov(pframe) + write);
+        write += BLOCK_SECTOR_SIZE;
+        sector++;
+    }
     return true;
 }
 
@@ -56,7 +56,7 @@ void swap_out(uint8_t *pframe, uint32_t swap_index)
 void swap_in(uint32_t swap_index, uint8_t *pframe)
 {
     struct thread *t = swap.sw_table[swap_index];
-    // DBG_MSG_VM("[VM: %s] Swap instance %d: %s\n", thread_name(), swap_index, t->name);
+    DBG_MSG_VM("[VM: %s] Swap instance %d: %s\n", thread_name(), swap_index, t->name);
     ASSERT(thread_current() == swap.sw_table[swap_index]);
     /* Read the target frame to sector */
     int read = 0, sector = swap_index * PGSIZE / BLOCK_SECTOR_SIZE;
@@ -82,7 +82,7 @@ int swap_alloc()
     }
     if(i < swap_pages)
     {
-        swap.sw_table[i] = thread_current();
+        // swap.sw_table[i] = thread_current();
         lock_release(&swap.lock);
         return i;
     }
