@@ -48,6 +48,7 @@ syscall_init (void)
 void exit (int status)
 {
   DBG_MSG_USERPROG("[%s] calls exit\n", thread_name());
+  // PANIC("CP");
   char thread_full_name[128];
   strlcpy(thread_full_name, thread_name(), 128);
   char *process_name, *save_prt;
@@ -345,11 +346,14 @@ static mmapid_t mmap(int fd, uint8_t *vaddr)
   if(fd <= STDOUT_FILENO || fd >= NOFILE || filesize(fd) == 0)
     return -1;
   // Goto the file array
+  DBG_MSG_VM("[VM: %s] mapping file..\n", thread_name());
   struct openning_file *f = &thread_current()->ofile[fd - 2];
-  if(f->file == NULL) return -1;
+  if(f->file == NULL) return -1; // No file
+  if(f->mmap_start != NULL) return -1; // no remap now
   f->mmap_start = vaddr;
-  f->mmap_end = vaddr + ROUND_UP((uint32_t)vaddr, PGSIZE);
+  f->mmap_end = vaddr + ROUND_UP(filesize(fd), PGSIZE);
   // Add the page to the supplement table;
+  DBG_MSG_VM("[VM: %s] adding mmap page from 0x%x to 0x%x to supp table..\n", thread_name(), f->mmap_start, f->mmap_end);
   uint8_t *a;
   for(a = f->mmap_start; a < f->mmap_end ; a += PGSIZE)
   {
@@ -362,7 +366,23 @@ static mmapid_t mmap(int fd, uint8_t *vaddr)
 
 static void munmap(mmapid_t mapping)
 {
-
+  struct openning_file *f = &thread_current()->ofile[mapping - 2];
+  ASSERT(f->file != NULL && f->mmap_start != NULL && f->mmap_end != NULL); // valid mmap
+  uint8_t *a, *k;
+  off_t file_offset = 0;
+  for(a = f->mmap_start; a < f->mmap_end ; a += PGSIZE)
+  {
+    if(pagedir_is_dirty(thread_current()->pagedir, a)) // is dirty
+    {
+      file_seek(f->file, file_offset);
+      off_t written = file_write_at(f->file, a, PGSIZE, file_offset);
+      DBG_MSG_VM("[VM:%s]write %d bytes to mmap file at 0x%x\n", thread_name(), written, a);
+    }
+    file_offset += PGSIZE;
+  }
+  file_reopen(f->file);
+  f->mmap_start = NULL;
+  f->mmap_end = NULL;
 }
 
 static bool is_valid_mmap_vaddr(void *vaddr)
@@ -374,7 +394,7 @@ static bool is_valid_mmap_vaddr(void *vaddr)
   if(is_kernel_vaddr(vaddr)) 
     return false;
   // Must be align
-  if((uint32_t) vaddr % 4096 != 0) 
+  if((uint32_t) vaddr % PGSIZE != 0) 
     return false;
   // Must not be mapped
   if(pagedir_get_page(thread_current()->pagedir, vaddr) != NULL) 
