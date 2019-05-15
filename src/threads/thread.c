@@ -275,6 +275,7 @@ thread_create (const char *name, int priority,
   for (i = 0; i < NOFILE; i++)
   {
     t->ofile[i].file = NULL;
+    t->ofile[i].mfile = NULL;
     t->ofile[i].mmap_start = NULL;
     t->ofile[i].mmap_end = NULL;
   }

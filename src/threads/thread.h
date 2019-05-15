@@ -65,6 +65,7 @@ typedef int tid_t;
 struct openning_file
 {
   struct file *file;
+  struct file *mfile;
   uint8_t *mmap_start;
   uint8_t *mmap_end;
 };

@@ -191,7 +191,7 @@ page_fault (struct intr_frame *f)
             struct openning_file *f = &thread_current()->ofile[(uint32_t) p->aux - 2];
             uint32_t file_offset = vpage - f->mmap_start;
             // read from file
-            off_t read_bytes = file_read_at(f->file, vpage, PGSIZE, file_offset);
+            off_t read_bytes = file_read_at(f->mfile, vpage, PGSIZE, file_offset);
             if(read_bytes < PGSIZE)
             {
                memset(vpage + read_bytes, vpage + PGSIZE, 0);

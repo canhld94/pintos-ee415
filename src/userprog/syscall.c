@@ -351,6 +351,7 @@ static mmapid_t mmap(int fd, uint8_t *vaddr)
   struct openning_file *f = &thread_current()->ofile[fd - 2];
   if(f->file == NULL) return -1; // No file
   if(f->mmap_start != NULL) return -1; // no remap now
+  f->mfile = file_reopen(f->file);
   f->mmap_start = vaddr;
   f->mmap_end = vaddr + ROUND_UP(filesize(fd), PGSIZE);
   // Add the page to the supplement table;
@@ -368,7 +369,7 @@ static mmapid_t mmap(int fd, uint8_t *vaddr)
 static void munmap(mmapid_t mapping)
 {
   struct openning_file *f = &thread_current()->ofile[mapping - 2];
-  ASSERT(f->file != NULL && f->mmap_start != NULL && f->mmap_end != NULL); // valid mmap
+  ASSERT(f->mfile != NULL && f->mmap_start != NULL && f->mmap_end != NULL); // valid mmap
   uint8_t *a, *k;
   off_t file_offset = 0;
   for(a = f->mmap_start; a < f->mmap_end ; a += PGSIZE)
@@ -382,14 +383,14 @@ static void munmap(mmapid_t mapping)
     }
     else if(pagedir_is_dirty(thread_current()->pagedir, a)) // is dirty
     {
-      off_t written = file_write_at(f->file, a, PGSIZE, file_offset);
+      off_t written = file_write_at(f->mfile, a, PGSIZE, file_offset);
       DBG_MSG_VM("[VM:%s]write %d bytes to mmap file at 0x%x\n", thread_name(), written, a);
       frame_free(k);
       pagedir_clear_page(thread_current()->pagedir, a);
     }
     file_offset += PGSIZE;
   }
-  file_reopen(f->file);
+  file_close(f->mfile);
   f->mmap_start = NULL;
   f->mmap_end = NULL;
 }
