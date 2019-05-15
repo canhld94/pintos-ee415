@@ -36,7 +36,6 @@ static void seek (int fd, unsigned position);
 static unsigned tell (int fd);
 static void close (int fd);
 static mmapid_t mmap(int fd, uint8_t *vaddr);
-static void munmap(mmapid_t mapping);
 
 #define TO_ARG(ESP, X) (*(int *)(ESP + 4*X))
 
@@ -366,7 +365,7 @@ static mmapid_t mmap(int fd, uint8_t *vaddr)
 
 }
 
-static void munmap(mmapid_t mapping)
+void munmap(mmapid_t mapping)
 {
   struct openning_file *f = &thread_current()->ofile[mapping - 2];
   ASSERT(f->mfile != NULL && f->mmap_start != NULL && f->mmap_end != NULL); // valid mmap
@@ -381,7 +380,7 @@ static void munmap(mmapid_t mapping)
       ASSERT(p != NULL);
       page_table_remove(thread_current(), p);
     }
-    else if(pagedir_is_dirty(thread_current()->pagedir, a)) // is dirty
+    else if(k != NULL && pagedir_is_dirty(thread_current()->pagedir, a)) // is dirty
     {
       off_t written = file_write_at(f->mfile, a, PGSIZE, file_offset);
       DBG_MSG_VM("[VM:%s]write %d bytes to mmap file at 0x%x\n", thread_name(), written, a);
@@ -391,6 +390,7 @@ static void munmap(mmapid_t mapping)
     file_offset += PGSIZE;
   }
   file_close(f->mfile);
+  f->mfile = NULL;
   f->mmap_start = NULL;
   f->mmap_end = NULL;
 }

@@ -205,6 +205,7 @@ page_fault (struct intr_frame *f)
          
       }
       page_table_remove(thread_current(), p);
+      pagedir_set_dirty(thread_current()->pagedir, vpage, 0);
       goto done;   
   }
   else if ((fault_addr - f->esp < PGSIZE && f->esp - fault_addr < PGSIZE) ) /* Stack growth */
@@ -221,6 +222,7 @@ page_fault (struct intr_frame *f)
                kill(f);
             }
          }
+         pagedir_set_dirty(thread_current()->pagedir, vpage, 0);
          vpage += PGSIZE;
       }
       goto done;

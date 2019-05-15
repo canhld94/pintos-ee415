@@ -183,6 +183,15 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  /* Unmap all file */
+  uint32_t i;
+  for(i = 0; i < NOFILE; ++i)
+  {
+    if(cur->ofile[i].mfile != NULL) // not yet unmap
+    {
+      munmap(i + 2);
+    }
+  }
   /* Free the swap table */
   swap_free(cur);
   /* Free the frame table */
