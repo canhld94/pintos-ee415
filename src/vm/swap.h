@@ -13,7 +13,7 @@ struct _swap
 
 void swap_init();
 
-void swap_out(uint8_t *pframe, uint32_t swap_index);
+void swap_out(uint8_t *pframe, uint32_t swap_index, struct thread *t);
 
 void swap_in(uint32_t swap_index, uint8_t *pframe);
 

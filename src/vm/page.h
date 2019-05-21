@@ -12,7 +12,7 @@ struct page
 };
 
 void page_table_init(struct thread *t);
-void page_table_insert(struct thread *t, const uint8_t *address, uint8_t *aux);
+struct page *page_table_insert(struct thread *t, const uint8_t *address, uint8_t *aux);
 void page_table_remove(struct thread *t, struct page *p);
 struct page *page_table_lookup(struct thread *t, const uint8_t *address);
 void page_table_destroy(struct thread *t);

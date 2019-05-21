@@ -69,6 +69,14 @@ struct openning_file
   uint8_t *mmap_start;
   uint8_t *mmap_end;
 };
+
+/* Page management */
+struct page_mgm
+{
+  struct lock lock;
+  struct hash *page_table;
+};
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -151,7 +159,7 @@ struct thread
     struct file *my_elf;
 
     /* Used in Project 3 - VM */
-    struct hash *supp_table;
+    struct page_mgm *page_mgm;
 #endif
 
     /* Owned by thread.c. */

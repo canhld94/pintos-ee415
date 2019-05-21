@@ -339,30 +339,30 @@ map an opened file fd to the address vaddr
 */
 static mmapid_t mmap(int fd, uint8_t *vaddr)
 {
-  // Valid address
+  /* Valid address */
   if(!is_valid_mmap_vaddr(vaddr))
     return -1;
-  // Valid file
+  /* Valid file */
   if(fd <= STDOUT_FILENO || fd >= NOFILE || filesize(fd) == 0)
     return -1;
-  // Goto the file array
+  /* Goto the file array */
   DBG_MSG_VM("[VM: %s] mapping file..\n", thread_name());
   struct openning_file *f = &thread_current()->ofile[fd - 2];
-  if(f->file == NULL) return -1; // No file
-  if(f->mmap_start != NULL) return -1; // no remap now
+  if(f->file == NULL) return -1; /* No file */
+  if(f->mmap_start != NULL) return -1; /* no remap now */
   f->mfile = file_reopen(f->file);
   f->mmap_start = vaddr;
   f->mmap_end = vaddr + ROUND_UP(filesize(fd), PGSIZE);
-  // Add the page to the supplement table;
+  /* Add the page to the supplement table; */
   DBG_MSG_VM("[VM: %s] adding mmap page from 0x%x to 0x%x to supp table..\n", thread_name(), f->mmap_start, f->mmap_end);
   uint8_t *a;
   for(a = f->mmap_start; a < f->mmap_end ; a += PGSIZE)
   {
     a = (uint32_t) a | PTE_AVL;
-    page_table_insert(thread_current(), a, fd);
+    if(page_table_insert(thread_current(), a, fd) != NULL)
+      return -1;
   }
   return fd;
-
 }
 
 void munmap(mmapid_t mapping)
@@ -374,7 +374,7 @@ void munmap(mmapid_t mapping)
   for(a = f->mmap_start; a < f->mmap_end ; a += PGSIZE)
   {
     k = pagedir_get_page(thread_current()->pagedir, a);
-    if(k == NULL) // not yet accessed
+    if(k == NULL)  /* not yet accessed */
     {
       struct page *p = page_table_lookup(thread_current(), a);
       ASSERT(p != NULL);
@@ -384,8 +384,8 @@ void munmap(mmapid_t mapping)
     {
       off_t written = file_write_at(f->mfile, a, PGSIZE, file_offset);
       DBG_MSG_VM("[VM:%s]write %d bytes to mmap file at 0x%x\n", thread_name(), written, a);
-      frame_free(k);
       pagedir_clear_page(thread_current()->pagedir, a);
+      frame_free(k);
     }
     file_offset += PGSIZE;
   }
@@ -397,21 +397,21 @@ void munmap(mmapid_t mapping)
 
 static bool is_valid_mmap_vaddr(void *vaddr)
 {
-  // Not NULL
+  /* Not NULL */
   if(vaddr == NULL)
     return false;
-  // Not a kernel address space
+  /* Not a kernel address space */
   if(is_kernel_vaddr(vaddr)) 
     return false;
-  // Must be align
+  /* Must be align */
   if((uint32_t) vaddr % PGSIZE != 0) 
     return false;
-  // Must not be mapped
+  /* Must not be mapped */
   if(pagedir_get_page(thread_current()->pagedir, vaddr) != NULL) 
     return false;
-  // Must not in the supp table
+  /* Must not in the supp table */
   if(page_table_lookup(thread_current(), vaddr) != NULL)
     return false;
-  // Pass all
+  /* Pass all */
   return true;
 }

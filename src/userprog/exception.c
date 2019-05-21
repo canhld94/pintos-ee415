@@ -4,6 +4,7 @@
 #include "round.h"
 #include <inttypes.h>
 #include <stdio.h>
+#include "string.h"
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -165,16 +166,13 @@ page_fault (struct intr_frame *f)
   uint8_t *vpage = (uint8_t *) ROUND_DOWN((uint32_t) fault_addr, PGSIZE);
   if(vpage == NULL || vpage >= PHYS_BASE) /* Illegal address */
   {
-      // intr_dump_frame(f);  
       kill(f);
   }
-//   DBG_MSG_VM("[VM: %s] looking for page 0x%x at supp table\n", thread_name(), vpage);
   struct page *p = page_table_lookup(thread_current(), vpage);
   if(p != NULL)
   {
-      // DBG_MSG_VM("[VM: %s] find 0x%x with aux 0x%x\n", thread_name(), vpage, p->aux);
-      uint8_t *kpage = frame_alloc();
-      if(kpage == NULL || !install_page(vpage, kpage, 1))
+      uint8_t *kpage = frame_alloc(vpage);
+      if(kpage == NULL)
       {
          DBG_MSG_VM("[VM: %s] full of memory, kill\n", thread_name());
          kill(f);
@@ -182,29 +180,36 @@ page_fault (struct intr_frame *f)
       if(p->aux == -1) /* load new page from elf --> do nothing */
       {
          // DBG_MSG_VM("[VM: %s] load 0x%x from elf %d\n", thread_name(), p->vaddr, p->aux);
+         install_page(vpage, kpage, 1);
       }
       else /* Swap page or mmap page, detect by the bit 9-11 in page */
       {
          if((uint32_t) p->vaddr & PTE_AVL) // mmap page
          {
+            install_page(vpage, kpage, 1);
             DBG_MSG_VM("[VM: %s] load 0x%x from mmap %d\n", thread_name(), p->vaddr, p->aux);
             struct openning_file *f = &thread_current()->ofile[(uint32_t) p->aux - 2];
             uint32_t file_offset = vpage - f->mmap_start;
             // read from file
             off_t read_bytes = file_read_at(f->mfile, vpage, PGSIZE, file_offset);
-            if(read_bytes < PGSIZE)
-            {
-               memset(vpage + read_bytes, vpage + PGSIZE, 0);
-            }
+            // if(read_bytes < PGSIZE)
+            // {
+            //    memset(vpage + read_bytes, vpage + PGSIZE, 0);
+            // }
          }
          else
          {
-            // DBG_MSG_VM("[VM: %s] load 0x%x from swap %d\n", thread_name(), p->vaddr, p->aux);
-            swap_in(p->aux, vtop(kpage));
+            DBG_MSG_VM("[VM: %s] load 0x%x from swap %d at pf %d\n", thread_name(), p->vaddr, (uint32_t) p->aux >> 12, page_fault_cnt);
+            /* Mark the frame that's being swapped in */
+            frame_table_set_restricted(vtop(kpage), 1);
+            swap_in((uint32_t) p->aux >> PGBITS, vtop(kpage));
+            frame_table_set_restricted(vtop(kpage), 0);
+            /* Mark the frame that's it's nomal */
+            install_page(vpage, kpage, 1);
          }
-         
       }
       page_table_remove(thread_current(), p);
+      // lock_release(&thread_current()->page_mgm->lock);
       pagedir_set_dirty(thread_current()->pagedir, vpage, 0);
       goto done;   
   }
@@ -215,7 +220,7 @@ page_fault (struct intr_frame *f)
       {
          if(pagedir_get_page(thread_current()->pagedir ,vpage) == NULL)
          {
-            uint8_t *kpage = frame_alloc();
+            uint8_t *kpage = frame_alloc(vpage);
             if(kpage == NULL || !install_page(vpage, kpage, 1))
             {
                DBG_MSG_VM("[VM: %s] full of memory, kill\n", thread_name());
@@ -229,10 +234,10 @@ page_fault (struct intr_frame *f)
   }
   else
   {
-      DBG_MSG_VM("[VM: %s] call page fault at 0x%x\n", thread_name(), fault_addr);  
+      DBG_MSG_VM("[VM: %s] call page fault at 0x%x at pf %d\n", thread_name(), fault_addr, page_fault_cnt);  
       // intr_dump_frame(f);
-      kill(f);
       // PANIC("PGF");
+      kill(f);
   }
 
   done:

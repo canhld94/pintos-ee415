@@ -192,13 +192,6 @@ process_exit (void)
       munmap(i + 2);
     }
   }
-  /* Free the swap table */
-  swap_free(cur);
-  /* Free the frame table */
-  frame_table_free(cur);
-  /* Free the supplemental table */
-  page_table_destroy(thread_current());
-
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -215,6 +208,12 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+  /* Free the swap table */
+  swap_free(cur);
+  /* Free the frame table */
+  frame_table_free(cur);
+  /* Free the supplemental table */
+  page_table_destroy(cur);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -542,7 +541,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       if(page_read_bytes > 0) /* Load all needed page */
       {
         /* Get a page of memory. */
-        uint8_t *kpage = frame_alloc();
+        uint8_t *kpage = frame_alloc(upage);
         if (kpage == NULL)
         {
           DBG_MSG_VM("[%s - load_segment] cannot allocate page\n",thread_name());
@@ -569,7 +568,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       else /* Marked in the supp table that allocate new page is enough */
       {
         // DBG_MSG_VM("[VM: %s - load_segment] insert segment page 0x%x to page table\n",thread_name(), upage);
-        page_table_insert(thread_current(), upage, -1);
+        ASSERT(page_table_insert(thread_current(), upage, -1) == NULL);
       }
             /* Advance. */
       read_bytes -= page_read_bytes;
@@ -592,7 +591,7 @@ bool
 install_page (void *upage, void *kpage, bool writable)
 {
   struct thread *t = thread_current ();
-  frame_table_set(vtop(kpage), t, upage);
+  // frame_table_set(vtop(kpage), t, upage, true);
   /* Verify that there's not already a page at that virtual
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
@@ -608,7 +607,7 @@ setup_stack (void **esp, char **argv, int argc)
   uint8_t *kpage;
   bool success = false;
 
-  kpage =  frame_alloc(); /* kpage is a PHYSICAL page */
+  kpage =  frame_alloc(((uint8_t *) PHYS_BASE) - PGSIZE); /* kpage is a PHYSICAL page */
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
