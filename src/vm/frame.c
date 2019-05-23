@@ -1,3 +1,8 @@
+/*  
+  Duc-Canh Le <canhld@kaist.ac.kr>
+  Network and Computing Laboratory
+*/
+
 #include "frame.h"
 #include "stdio.h"
 #include "stdlib.h"

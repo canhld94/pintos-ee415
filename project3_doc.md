@@ -90,7 +90,7 @@ only one process can do the eviction at a time.
 All page table should support fast lookup, however we choose different implementation 
 for each table:
 For the supplemental page table, we use hash table because the supplemental table is
-per thread, so we dont want to store information of all page in the table because it 
+per thread, so we dont want to store information of all pages in the table because it 
 will waiste a lot of memory. Hash table allow fast looking up and reasonable page size 
 (only needed pages are added to the table and will be removed when it's reloaded)
 For the frame table and swap table, we simply use fixed array and use the frame (or swap

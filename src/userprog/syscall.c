@@ -359,8 +359,18 @@ static mmapid_t mmap(int fd, uint8_t *vaddr)
   for(a = f->mmap_start; a < f->mmap_end ; a += PGSIZE)
   {
     a = (uint32_t) a | PTE_AVL;
-    if(page_table_insert(thread_current(), a, fd) != NULL)
+    if(page_table_insert(thread_current(), a, fd) != NULL) /* Overlap mapping */
+    {
+      /* Remove all page from supp table */
+      struct page *p;
+      while(a > f->mmap_start)
+      {
+        p = page_table_lookup(thread_current(), a);
+        if(p) page_table_remove(thread_current(), p);
+        a -= PGSIZE;
+      }
       return -1;
+    }
   }
   return fd;
 }

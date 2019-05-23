@@ -1,3 +1,8 @@
+/*  
+  Duc-Canh Le <canhld@kaist.ac.kr>
+  Network and Computing Laboratory
+*/
+
 #ifndef  _FRAME_H_
 #define _FRAME_H_
 #include "threads/palloc.h"

@@ -1,3 +1,8 @@
+/*  
+  Duc-Canh Le <canhld@kaist.ac.kr>
+  Network and Computing Laboratory
+*/
+
 #include "page.h"
 #include "threads/malloc.h"
 #include "threads/vaddr.h"

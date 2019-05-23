@@ -1,3 +1,8 @@
+/*  
+  Duc-Canh Le <canhld@kaist.ac.kr>
+  Network and Computing Laboratory
+*/
+
 #ifndef _PAGE_H_
 #define _PAGE_H_
 #include "hash.h"

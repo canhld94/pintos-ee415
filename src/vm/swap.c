@@ -1,3 +1,8 @@
+/*  
+  Duc-Canh Le <canhld@kaist.ac.kr>
+  Network and Computing Laboratory
+*/
+
 #include "swap.h"
 #include "threads/vaddr.h"
 #include "threads/palloc.h"

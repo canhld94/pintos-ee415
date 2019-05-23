@@ -1,3 +1,8 @@
+/*  
+  Duc-Canh Le <canhld@kaist.ac.kr>
+  Network and Computing Laboratory
+*/
+
 #ifndef _SWAP_H_
 #define _SWAP_H_
 #include "devices/block.h"
