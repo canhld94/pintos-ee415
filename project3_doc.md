@@ -168,7 +168,17 @@ within a page) to the stack pointer, we also consider it as stack growth.
 >> particular, explain how it prevents deadlock.  (Refer to the
 >> textbook for an explanation of the necessary conditions for
 >> deadlock.)
-
+We have two global locks (frame lock and swap lock). If a process 
+want to access the frame (or swap) table (both r/w/d), it mus first 
+acquire the frame (or swap) lock. Sometime (e.g. during the eviction),
+we need to acquire both of these locks, then it could lead to deadlock. 
+We prevent deadlock by breaking the "No Preemption" condition: a 
+process can release all of it locks to other processes if neccessary, 
+and wait for a random period of time before re-acquire these lock (to
+prevent livelock). 
+Each supplemental table also have its lock to prevent the race condition 
+because a thread can access to other thread supplemental table during the
+eviction.
 
 >> B6: A page fault in process P can cause another process Q's frame
 >> to be evicted.  How do you ensure that Q cannot access or modify
@@ -230,11 +240,11 @@ New struct:
 	<!-- An opened file in the process --> 
 	struct openning_file
 	{
-	struct file *file;		<!-- Pointer to file -->
-	struct file *mfile;		<!-- Pointer to the file when mapping is created -->
-	uint8_t *mmap_start;	<!-- Start address of mapping -->
-	uint8_t *mmap_end;		<!-- End address of mapping -->
-};
+		struct file *file;		<!-- Pointer to file -->
+		struct file *mfile;		<!-- Pointer to the file when mapping is created -->
+		uint8_t *mmap_start;	<!-- Start address of mapping -->
+		uint8_t *mmap_end;		<!-- End address of mapping -->
+	};
 
 Added in the thread struct:
     struct openning_file *ofile; 	<!-- The file handler (and mmap handler as well) array -->
