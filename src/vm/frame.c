@@ -131,7 +131,7 @@ void *frame_alloc(void * vpage)
 void frame_table_free(struct thread *t)
 {
     int i;
-    lock_acquire(&frame.lock);
+    // lock_acquire(&frame.lock);
     for(i = 0; i < frame.user_frames; i++)
     {
         if(frame.frame_table[i].thread == t)
@@ -139,9 +139,10 @@ void frame_table_free(struct thread *t)
             // DBG_MSG_VM("[VM: %s] free frame entry 0x%x\n", thread_name(), frame_table_get_pframe(i));
             frame.frame_table[i].thread = NULL;
             frame.frame_table[i].page = NULL;
+            frame.frame_table[i].aux = NULL;
         }
     }
-    lock_release(&frame.lock);
+    // lock_release(&frame.lock);
 }
 
 void frame_free(void *kpage)
@@ -161,7 +162,7 @@ void frame_destroy()
     palloc_free_multiple(frame.frame_table, npage * sizeof(struct _frame_table) / PGSIZE);
 }
 
-void frame_table_set_restricted(uint8_t *pframe, uint32_t access)
+void frame_table_set_restricted(uint8_t *pframe, void *access)
 {
     uint32_t index =  (uint32_t) pframe / PGSIZE - (1024*1024)/PGSIZE - frame.total_frames/2 - 1;
     lock_acquire(&frame.lock);
@@ -170,21 +171,25 @@ void frame_table_set_restricted(uint8_t *pframe, uint32_t access)
 }
 static bool frame_table_is_restricted(uint8_t *pframe)
 {
-    uint32_t access;
+    void *access;
     uint32_t index =  (uint32_t) pframe / PGSIZE - (1024*1024)/PGSIZE - frame.total_frames/2 - 1;
     // lock_acquire(&frame.lock);
     access = frame.frame_table[index].aux;
     // lock_release(&frame.lock);
-    if(access == 1) return true;
+    if(access == -1) 
+    {
+        return true;
+    }
     else return false;
 }
 
 static uint8_t *frame_to_be_evicted()
 {
-    static uint32_t i = 0, f;
-    i += 11;
-    random_init(i%INT32_MAX);
+    static uint32_t i = 0;
+    uint32_t f;
     gen:
+    i += 1;
+    random_init(i);
     f = random_ulong() % (frame.user_frames - 1);
     // if(pagedir_is_dirty(frame.frame_table[f].thread->pagedir, frame.frame_table[f].page))
     // {

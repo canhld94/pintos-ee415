@@ -44,7 +44,7 @@ void *frame_alloc(void *);
 void frame_free(void *);
 void frame_table_get(uint8_t *pframe, struct thread **t, uint8_t **page, bool lock);
 void frame_table_set(uint8_t *pframe, struct thread *t, uint8_t *page, bool lock);
-void frame_table_set_restricted(uint8_t *pframe, uint32_t access);
+void frame_table_set_restricted(uint8_t *pframe, void *access);
 void frame_table_free(struct thread *t);
 uint8_t *frame_table_get_pframe(uint32_t index);
 void frame_destroy();

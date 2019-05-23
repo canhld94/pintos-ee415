@@ -27,6 +27,8 @@
 #include "vm/page.h"
 #include "vm/swap.h"
 
+extern struct _frame frame;
+extern struct _swap swap;
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
@@ -192,6 +194,14 @@ process_exit (void)
       munmap(i + 2);
     }
   }
+  lock_acquire(&frame.lock);
+  lock_acquire(&swap.lock);
+  /* Free the swap table */
+  swap_free(cur);
+  /* Free the frame table */
+  frame_table_free(cur);
+  /* Free the supplemental table */
+  page_table_destroy(cur);
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -208,12 +218,8 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-  /* Free the swap table */
-  swap_free(cur);
-  /* Free the frame table */
-  frame_table_free(cur);
-  /* Free the supplemental table */
-  page_table_destroy(cur);
+  lock_release(&frame.lock);
+  lock_release(&swap.lock);
 }
 
 /* Sets up the CPU for running user code in the current

@@ -164,9 +164,13 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
   uint8_t *vpage = (uint8_t *) ROUND_DOWN((uint32_t) fault_addr, PGSIZE);
-  if(vpage == NULL || vpage >= PHYS_BASE) /* Illegal address */
+  if(fault_addr == NULL || vpage >= PHYS_BASE) /* Illegal address */
   {
       kill(f);
+  }
+  if(write && !not_present) /* Write violation */
+  {
+     kill(f);
   }
   struct page *p = page_table_lookup(thread_current(), vpage);
   if(p != NULL)
@@ -191,7 +195,9 @@ page_fault (struct intr_frame *f)
             struct openning_file *f = &thread_current()->ofile[(uint32_t) p->aux - 2];
             uint32_t file_offset = vpage - f->mmap_start;
             // read from file
+            frame_table_set_restricted(vtop(kpage), -1);
             off_t read_bytes = file_read_at(f->mfile, vpage, PGSIZE, file_offset);
+            frame_table_set_restricted(vtop(kpage), 0);
             // if(read_bytes < PGSIZE)
             // {
             //    memset(vpage + read_bytes, vpage + PGSIZE, 0);
@@ -201,7 +207,7 @@ page_fault (struct intr_frame *f)
          {
             DBG_MSG_VM("[VM: %s] load 0x%x from swap %d at pf %d\n", thread_name(), p->vaddr, (uint32_t) p->aux >> 12, page_fault_cnt);
             /* Mark the frame that's being swapped in */
-            frame_table_set_restricted(vtop(kpage), 1);
+            frame_table_set_restricted(vtop(kpage), -1);
             swap_in((uint32_t) p->aux >> PGBITS, vtop(kpage));
             frame_table_set_restricted(vtop(kpage), 0);
             /* Mark the frame that's it's nomal */
@@ -211,6 +217,11 @@ page_fault (struct intr_frame *f)
       page_table_remove(thread_current(), p);
       // lock_release(&thread_current()->page_mgm->lock);
       pagedir_set_dirty(thread_current()->pagedir, vpage, 0);
+      pagedir_set_accessed(thread_current()->pagedir, vpage, 0);
+      if(!user) /* Kernel frame, lock it */
+      {
+         frame_table_set_restricted(vtop(kpage), -1);
+      }
       goto done;   
   }
   else if ((fault_addr - f->esp < PGSIZE && f->esp - fault_addr < PGSIZE) ) /* Stack growth */
@@ -228,6 +239,7 @@ page_fault (struct intr_frame *f)
             }
          }
          pagedir_set_dirty(thread_current()->pagedir, vpage, 0);
+         pagedir_set_accessed(thread_current()->pagedir, vpage, 0);
          vpage += PGSIZE;
       }
       goto done;

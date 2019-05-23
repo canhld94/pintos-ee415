@@ -94,7 +94,7 @@ int swap_alloc()
 void swap_free(struct thread *t) 
 {
     int i, swap_pages = block_size(swap.block_sw) * BLOCK_SECTOR_SIZE / PGSIZE;
-    lock_acquire(&swap.lock);
+    // lock_acquire(&swap.lock);
     for( i = 0; i < swap_pages; i++)
     {
         if(swap.sw_table[i] == t)
@@ -103,7 +103,7 @@ void swap_free(struct thread *t)
             swap.sw_table[i] = NULL;
         }
     }
-    lock_release(&swap.lock);
+    // lock_release(&swap.lock);
 }
 
 static void dump_swap_table()
