@@ -6,7 +6,7 @@
 #ifndef THREADS_THREAD_H
 #define THREADS_THREAD_H
 #define USERPROG
-#define DEBUG 0
+#define DEBUG 1
 #define NOFILE 256
 #include <debug.h>
 #include <list.h>
@@ -35,7 +35,7 @@
   #define DBG_MSG_VM(...) do{} while (0)
 #endif
 
-#if(DEBUG > 1)
+#if(DEBUG > 0)
   #define DBG_MSG_FS printf
 #else 
   #define DBG_MSG_FS(...) do{} while (0)

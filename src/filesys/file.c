@@ -1,6 +1,7 @@
 #include "filesys/file.h"
 #include <debug.h>
 #include "filesys/inode.h"
+#include "filesys/cache.h"
 #include "threads/malloc.h"
 
 /* An open file. */
@@ -47,6 +48,7 @@ file_close (struct file *file)
 {
   if (file != NULL)
     {
+      disk_cache_flush_all();
       file_allow_write (file);
       inode_close (file->inode);
       free (file); 

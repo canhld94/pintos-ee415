@@ -9,7 +9,7 @@
 #include "threads/thread.h"
 
 #define CACHE_MAGIC (-508)
-#define CACHE_SIZE  (64)    /* Size of the page cache in sector (512B) */
+#define CACHE_SIZE  (256)    /* Size of the page cache in sector (512B) */
 #define PC_A        (0x1)   /* Access bit */
 #define PC_D        (0x2)   /* Dirty bit */
 
@@ -29,7 +29,7 @@ struct _disk_cache           /* The buffer cache object */
     uint32_t size;          /* Size of the cache in sector */
 };
 /* Init the page cache */
-void disk_cache_init(); 
+void disk_cache_init(void); 
 /* Search for a particular disk sector in the page cache */
 uint8_t *disk_cache_search(block_sector_t sector, bool write);
 /* Add a sector to the page cache */
@@ -37,7 +37,7 @@ uint8_t *disk_cache_load(block_sector_t sector, bool write);
 /* Remove a sector from page cache */
 bool disk_cache_flush(struct _block_sector block_sector);
 /* Flush all page from cache to disk */
-bool disk_cache_flush_all();
+void disk_cache_flush_all(void);
 /* Return block sector is dirty or not */
 bool block_sector_is_dirty(struct _block_sector *b);
 /* Set a block sector dirty */

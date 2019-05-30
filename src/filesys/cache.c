@@ -99,8 +99,8 @@ uint8_t *disk_cache_load(block_sector_t sector, bool write)
     {
         block_write(fs_device, b->sector, b->data);
     }
-    b->sector = sector;
     block_read(fs_device, sector, b->data);
+    b->sector = sector;
     if(write)                       /* If write then set the block dirty and accessed */
     {
         block_sector_set_accessed(b, true);
@@ -109,7 +109,7 @@ uint8_t *disk_cache_load(block_sector_t sector, bool write)
     }
     else
     {
-        block_sector_set_accessed(b, true);
+        block_sector_set_accessed(b, false);
         block_sector_set_dirty(b, false);
         list_push_back(&disk_cache->sector_list, e);    
     }
@@ -153,8 +153,9 @@ void block_sector_set_accessed(struct _block_sector *b, bool access)
     }
 }
 
-bool disk_cache_flush_all()
+void disk_cache_flush_all()
 {
+    // DBG_MSG_FS("[FS - %s] fflush all dirty sector\n", thread_name());
     lock_acquire(&disk_cache->lock);
     struct list_elem *e = list_head(&disk_cache->sector_list);
     struct _block_sector *b;

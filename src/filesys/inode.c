@@ -167,7 +167,6 @@ inode_close (struct inode *inode)
   /* Ignore null pointer. */
   if (inode == NULL)
     return;
-  disk_cache_flush_all();
   /* Release resources if this was the last opener. */
   if (--inode->open_cnt == 0)
     {
