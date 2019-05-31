@@ -1,5 +1,6 @@
 #include "filesys/cache.h"
 #include "list.h"
+#include "string.h"
 #include "devices/block.h"
 #include "threads/malloc.h"
 
@@ -26,7 +27,7 @@ void disk_cache_init()
     }
 }
 
-uint8_t *disk_cache_search(block_sector_t sector, bool write)
+struct _block_sector *disk_cache_search(block_sector_t sector)
 {
     lock_acquire(&disk_cache->lock);
     struct list_elem *e = list_head(&disk_cache->sector_list);
@@ -36,31 +37,27 @@ uint8_t *disk_cache_search(block_sector_t sector, bool write)
         b = list_entry(e, struct _block_sector, elem);
         if(b->sector == sector) break;
     }
+    lock_release(&disk_cache->lock);
     if(e == list_end(&disk_cache->sector_list))
     {
-        lock_release(&disk_cache->lock);
         return NULL;
     }
     else
     {
-        block_sector_set_accessed(b, true);
-        if(write) block_sector_set_dirty(b, true);
-        lock_release(&disk_cache->lock);
-        return b->data;
+        return b;
     }
 }
 
-uint8_t *disk_cache_load(block_sector_t sector, bool write)
+struct _block_sector *disk_cache_load(block_sector_t sector, bool write)
 {
     struct list_elem *e;
     struct _block_sector *b;
     uint32_t i = 0, j = 0;
-    lock_acquire(&disk_cache->lock);
     while(1)
     {
         e = list_pop_front(&disk_cache->sector_list);
         b = list_entry(e, struct _block_sector, elem);
-        if(!block_sector_is_accessed(b))    /* If this sector is not accessed --> evict */
+        if(!block_sector_is_accessed(b) && block_sector_is_valid(b))    /* If this sector is not accessed --> evict */
         {
             break;
         }
@@ -69,7 +66,8 @@ uint8_t *disk_cache_load(block_sector_t sector, bool write)
             i++;
             if(i < CACHE_SIZE)      /* Not enought one round, cnt. searching for not accessed sector */
             {
-                block_sector_set_accessed(b, false);    /* Give the sector a second chance */
+                if (!block_sector_is_dirty(b))
+                    block_sector_set_accessed(b, false);    /* Give the sector a second chance */
                 list_push_back(&disk_cache->sector_list, e);
             }
             else                    /* All block is accessed, now check dirty */
@@ -89,69 +87,111 @@ uint8_t *disk_cache_load(block_sector_t sector, bool write)
                     {
                         break;
                     }   
-                }
-                
+                }  
             }
-            
         }
-    } 
+    }
     if(block_sector_is_dirty(b))    /* If b is dirty, then write back */
     {
+        ASSERT(block_sector_is_accessed(b));
+        // DBG_MSG_FS("[FS - %s] fflush dirty sector %d at it %d %d\n", thread_name(), b->sector, i, j);
         block_write(fs_device, b->sector, b->data);
     }
-    block_read(fs_device, sector, b->data);
+    lock_acquire(&disk_cache->lock);
+    block_sector_set_valid(b, false);
+    memset(b->data, 0, BLOCK_SECTOR_SIZE);
     b->sector = sector;
-    if(write)                       /* If write then set the block dirty and accessed */
-    {
-        block_sector_set_accessed(b, true);
-        block_sector_set_dirty(b, true);
-        list_push_back(&disk_cache->sector_list, e);
-    }
-    else
-    {
-        block_sector_set_accessed(b, false);
-        block_sector_set_dirty(b, false);
-        list_push_back(&disk_cache->sector_list, e);    
-    }
+    if(!write)
+        block_read(fs_device, b->sector, b->data);
+    block_sector_set_accessed(b, false);
+    block_sector_set_dirty(b, false);
+    if(!write)
+        block_sector_set_valid(b, true);
+    list_push_back(&disk_cache->sector_list, e);    
     lock_release(&disk_cache->lock);
-    return b->data;
+    return b;
+}
+
+void block_sector_load(struct _block_sector *b)
+{
+    lock_acquire(&disk_cache->lock);
+    ASSERT(!block_sector_is_accessed(b));
+    ASSERT(!block_sector_is_dirty(b));
+    block_read(fs_device, b->sector, b->data);
+    lock_release(&disk_cache->lock);
+}
+
+void block_sector_write(struct _block_sector *b, void *data, uint32_t offs, uint32_t len)
+{
+    lock_acquire(&disk_cache->lock);
+    block_sector_set_valid(b, false);
+    memcpy(b->data + offs, data, len);
+    block_sector_set_accessed(b, true);
+    block_sector_set_dirty(b, true);
+    block_sector_set_valid(b, true);
+    lock_release(&disk_cache->lock);
+}
+
+void block_sector_read(struct _block_sector *b, void *data, uint32_t offs, uint32_t len)
+{
+    lock_acquire(&disk_cache->lock);
+    ASSERT(block_sector_is_valid(b));
+    memcpy(data, b->data + offs, len);
+    block_sector_set_accessed(b, true);
+    lock_release(&disk_cache->lock);
 }
 
 bool block_sector_is_dirty(struct _block_sector *b)
 {
-    return b->flags & PC_D;
+    return (b->flags & PC_D) != 0;
 }
 
 void block_sector_set_dirty(struct _block_sector *b, bool dirty)
 {
     if (dirty)
     {
-        b->flags = b->flags | PC_D;
+        b->flags |= PC_D;
     }
     else
     {
-        b->flags = b->flags & ~PC_D;
+        b->flags &= ~ (uint32_t) PC_D;
     }
-    
-    
 }  
 
 bool block_sector_is_accessed(struct _block_sector *b)
 {
-    return b->flags & PC_A;
+    return (b->flags & PC_A) != 0;
 }
 
 void block_sector_set_accessed(struct _block_sector *b, bool access)
 {
     if (access)
     {
-        b->flags = b->flags | PC_A;
+        b->flags |= PC_A;
     }
     else
     {
-        b->flags = b->flags & ~PC_A;
+        b->flags &= ~ (uint32_t) PC_A;
     }
 }
+
+bool block_sector_is_valid(struct _block_sector *b)
+{
+    return (b->flags & PC_V) != 0;
+}
+
+void block_sector_set_valid(struct _block_sector *b, bool valid)
+{
+    if (valid)
+    {
+        b->flags |= PC_V;
+    }
+    else
+    {
+        b->flags &= ~ (uint32_t) PC_V;
+    }
+}
+
 
 void disk_cache_flush_all()
 {
@@ -164,6 +204,7 @@ void disk_cache_flush_all()
         b = list_entry(e, struct _block_sector, elem);
         if(block_sector_is_dirty(b)) 
         {
+            ASSERT(block_sector_is_accessed(b));
             block_write(fs_device, b->sector, b->data);
             block_sector_set_accessed(b, false);
             block_sector_set_dirty(b, false);

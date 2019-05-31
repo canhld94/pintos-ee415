@@ -9,10 +9,10 @@
 #include "threads/thread.h"
 
 #define CACHE_MAGIC (-508)
-#define CACHE_SIZE  (256)    /* Size of the page cache in sector (512B) */
+#define CACHE_SIZE  (64)    /* Size of the page cache in sector (512B) */
 #define PC_A        (0x1)   /* Access bit */
 #define PC_D        (0x2)   /* Dirty bit */
-
+#define PC_V        (0x4)   /* Valid bit */
 
 struct _block_sector         /* A block sector in disk cache */ 
 {
@@ -31,17 +31,27 @@ struct _disk_cache           /* The buffer cache object */
 /* Init the page cache */
 void disk_cache_init(void); 
 /* Search for a particular disk sector in the page cache */
-uint8_t *disk_cache_search(block_sector_t sector, bool write);
+struct _block_sector *disk_cache_search(block_sector_t sector);
 /* Add a sector to the page cache */
-uint8_t *disk_cache_load(block_sector_t sector, bool write);
-/* Remove a sector from page cache */
-bool disk_cache_flush(struct _block_sector block_sector);
+struct _block_sector *disk_cache_load(block_sector_t sector, bool write);
 /* Flush all page from cache to disk */
 void disk_cache_flush_all(void);
+/* Write to a block sector atomically */
+void block_sector_write(struct _block_sector *b, void *data, uint32_t offs, uint32_t len);
+/* Read from a block sector atomically */
+void block_sector_read(struct _block_sector *b, void *data, uint32_t offs, uint32_t len);
+/* Bring a data from disk to page cache */
+void block_sector_load(struct _block_sector *b);
+/* Remove a sector from page cache */
+void block_sector_flush(struct _block_sector *b);
 /* Return block sector is dirty or not */
 bool block_sector_is_dirty(struct _block_sector *b);
 /* Set a block sector dirty */
 void block_sector_set_dirty(struct _block_sector *b, bool dirty);
+/* Return block sector is valid or not */
+bool block_sector_is_valid(struct _block_sector *b);
+/* Set a block sector dirty */
+void block_sector_set_valid(struct _block_sector *b, bool valid);
 /* Return block sector is accessed or not */
 bool block_sector_is_accessed(struct _block_sector *b);
 /* Set a block sector dirty or not */
