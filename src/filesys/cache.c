@@ -256,7 +256,7 @@ static struct _block_sector *disk_cache_load(block_sector_t sector, bool write)
     // DBG_MSG_FS("[FS - %s] evict sector %d for new sector %d at it %d %d\n", thread_name(), b->sector, sector, i, j);
     if(block_sector_is_dirty(b))    /* If b is dirty, then write back */
     {
-        DBG_MSG_FS("[FS - %s] fflush dirty sector %d for new sector %d at it %d %d\n", thread_name(), b->sector, sector, i, j);
+        // DBG_MSG_FS("[FS - %s] fflush dirty sector %d for new sector %d at it %d %d\n", thread_name(), b->sector, sector, i, j);
         block_sector_flush(b, true);
     }
     rwlock_acquire_write_lock(&b->rw);
