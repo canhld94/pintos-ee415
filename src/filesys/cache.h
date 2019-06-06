@@ -14,12 +14,34 @@
 #define PC_D        (0x2)   /* Dirty bit */
 #define PC_V        (0x4)   /* Valid bit */
 
+/* RW lock, use in page cache and inode */
+struct _rw_lock
+{
+  struct lock lock;           /* General lock */
+  struct lock write_lock;     /* Write lock */
+  uint32_t reader;            /* number of reader in lock */
+};
+
+void rwlock_init( struct _rw_lock *rw );
+
+void rwlock_acquire_read_lock (struct _rw_lock *rw);
+
+void rwlock_release_read_lock (struct _rw_lock *rw);
+
+void rwlock_acquire_write_lock(struct _rw_lock *rw);
+
+void rwlock_release_write_lock(struct _rw_lock *rw);
+
+
 struct _block_sector         /* A block sector in disk cache */ 
 {
     struct list_elem elem;    
     block_sector_t sector;  /* Corresponding sector on disk */
+    uint32_t ref_count;     /* Number of process are refering to this block */
     uint32_t flags;         /* Flags */
     uint8_t *data;          /* Data of the sector */
+    struct lock lock;       /* Accessed lock */
+    struct _rw_lock rw;     /* r/w lock */
 };
 
 struct _disk_cache           /* The buffer cache object */
@@ -30,31 +52,10 @@ struct _disk_cache           /* The buffer cache object */
 };
 /* Init the page cache */
 void disk_cache_init(void); 
-/* Search for a particular disk sector in the page cache */
-struct _block_sector *disk_cache_search(block_sector_t sector);
-/* Add a sector to the page cache */
-struct _block_sector *disk_cache_load(block_sector_t sector, bool write);
 /* Flush all page from cache to disk */
 void disk_cache_flush_all(void);
-/* Write to a block sector atomically */
-void block_sector_write(struct _block_sector *b, void *data, uint32_t offs, uint32_t len);
-/* Read from a block sector atomically */
-void block_sector_read(struct _block_sector *b, void *data, uint32_t offs, uint32_t len);
-/* Bring a data from disk to page cache */
-void block_sector_load(struct _block_sector *b);
-/* Remove a sector from page cache */
-void block_sector_flush(struct _block_sector *b);
-/* Return block sector is dirty or not */
-bool block_sector_is_dirty(struct _block_sector *b);
-/* Set a block sector dirty */
-void block_sector_set_dirty(struct _block_sector *b, bool dirty);
-/* Return block sector is valid or not */
-bool block_sector_is_valid(struct _block_sector *b);
-/* Set a block sector dirty */
-void block_sector_set_valid(struct _block_sector *b, bool valid);
-/* Return block sector is accessed or not */
-bool block_sector_is_accessed(struct _block_sector *b);
-/* Set a block sector dirty or not */
-void block_sector_set_accessed(struct _block_sector *b, bool access);
-/* Destroy the page cache */
+/* Cached read, wrapper of block_read */
+void cached_read(block_sector_t sector, void *data, uint32_t offs, uint32_t len);
+/* Cached wrie, wrapper of block_write */
+void cached_write(block_sector_t sector, void *data, uint32_t offs, uint32_t len);
 #endif // !_CACHE_H_

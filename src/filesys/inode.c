@@ -236,13 +236,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       break;
 
     // DBG_MSG_FS("[FS - %s] load sector %d w offset %d and size %d\n", thread_name(), sector_idx, offset, size);
-    struct _block_sector *b = disk_cache_search(sector_idx);
-    if(b == NULL)
-    {
-      // DBG_MSG_FS("[FS - %s] load sector %d from disk to cache\n", thread_name(), sector_idx);
-      b = disk_cache_load(sector_idx, false);
-    }
-    block_sector_read(b, buffer + bytes_read, sector_ofs, chunk_size);
+    cached_read(sector_idx, buffer + bytes_read, sector_ofs, chunk_size);
     
     /* Advance. */
     size -= chunk_size;
@@ -282,31 +276,8 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
     int chunk_size = size < min_left ? size : min_left;
     if (chunk_size <= 0)
       break;
-
     // DBG_MSG_FS("[FS - %s] write to sector %d\n", thread_name(), sector_idx);
-    struct _block_sector *b = disk_cache_search(sector_idx);
-    if(b == NULL)
-    {
-      b = disk_cache_load(sector_idx, true);
-      if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
-      {
-        /* Write full sector directly to disk. */
-        block_sector_write(b, buffer + bytes_written, sector_ofs ,chunk_size);      
-      }
-      else
-      {
-        /* If the sector contains data before or after the chunk
-            we're writing, then we need to read in the sector
-            first.  Otherwise we start with a sector of all zeros. */
-        if (sector_ofs > 0 || chunk_size < sector_left) 
-          block_sector_load(b);
-        block_sector_write(b, buffer + bytes_written, sector_ofs, chunk_size);
-      }
-    }
-    else
-    {
-      block_sector_write(b, buffer + bytes_written, sector_ofs, chunk_size);
-    }
+    cached_write(sector_idx, buffer + bytes_written, sector_ofs, chunk_size);
     
     /* Advance. */
     size -= chunk_size;
