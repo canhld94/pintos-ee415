@@ -346,7 +346,7 @@ static mmapid_t mmap(int fd, uint8_t *vaddr)
   if(fd <= STDOUT_FILENO || fd >= NOFILE || filesize(fd) == 0)
     return -1;
   /* Goto the file array */
-  DBG_MSG_VM("[VM: %s] mapping file..\n", thread_name());
+  DBG_MSG_FS("[VM: %s] mapping file..\n", thread_name());
   struct openning_file *f = &thread_current()->ofile[fd - 2];
   if(f->file == NULL) return -1; /* No file */
   if(f->mmap_start != NULL) return -1; /* no remap now */
@@ -354,7 +354,7 @@ static mmapid_t mmap(int fd, uint8_t *vaddr)
   f->mmap_start = vaddr;
   f->mmap_end = vaddr + ROUND_UP(filesize(fd), PGSIZE);
   /* Add the page to the supplement table; */
-  DBG_MSG_VM("[VM: %s] adding mmap page from 0x%x to 0x%x to supp table..\n", thread_name(), f->mmap_start, f->mmap_end);
+  DBG_MSG_FS("[VM: %s] adding mmap page from 0x%x to 0x%x to supp table..\n", thread_name(), f->mmap_start, f->mmap_end);
   uint8_t *a;
   for(a = f->mmap_start; a < f->mmap_end ; a += PGSIZE)
   {
@@ -384,6 +384,7 @@ void munmap(mmapid_t mapping)
   for(a = f->mmap_start; a < f->mmap_end ; a += PGSIZE)
   {
     k = pagedir_get_page(thread_current()->pagedir, a);
+    uint32_t written = PGSIZE;
     if(k == NULL)  /* not yet accessed */
     {
       struct page *p = page_table_lookup(thread_current(), a);
@@ -392,12 +393,16 @@ void munmap(mmapid_t mapping)
     }
     else if(k != NULL && pagedir_is_dirty(thread_current()->pagedir, a)) // is dirty
     {
-      off_t written = file_write_at(f->mfile, a, PGSIZE, file_offset);
-      DBG_MSG_VM("[VM:%s]write %d bytes to mmap file at 0x%x\n", thread_name(), written, a);
+      if(file_offset + PGSIZE >= file_length(f->mfile)) /* We don't allow growing file via mmap */
+      {
+          written = file_length(f->mfile) - file_offset;
+      }
+      file_write_at(f->mfile, a, written, file_offset);
+      DBG_MSG_FS("[VM:%s]write %d bytes to mmap file at 0x%x\n", thread_name(), written, a);
       pagedir_clear_page(thread_current()->pagedir, a);
       frame_free(k);
     }
-    file_offset += PGSIZE;
+    file_offset += written;
   }
   file_close(f->mfile);
   f->mfile = NULL;

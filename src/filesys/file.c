@@ -48,7 +48,7 @@ file_close (struct file *file)
 {
   if (file != NULL)
     {
-      disk_cache_flush_all();
+      // disk_cache_flush_all();
       file_allow_write (file);
       inode_close (file->inode);
       free (file); 
