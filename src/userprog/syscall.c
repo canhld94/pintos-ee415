@@ -464,8 +464,18 @@ static bool mkdir(const char *dir)
   Else --> relative path --> keep process dir
   Tokenize the input string with '/'
   If the first word is '..' --> chdir to parrent dir --> how to know the parrent dir
-  
+
   */
+ if(dir == NULL || !*dir) // NULL pointer or empty string 
+ {
+   return false;
+ }
+ if(dir[0] == '/') /* Absolute path, need to go to root directory */
+ {
+
+ }
+ /* Tokenize the string */
+ 
 }
 
 static bool readdir(int id, char *dir)

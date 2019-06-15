@@ -6,30 +6,44 @@
 #include "filesys/inode.h"
 #include "threads/malloc.h"
 
-/* A directory. */
-struct dir 
-  {
-    struct inode *inode;                /* Backing store. */
-    off_t pos;                          /* Current position. */
-  };
-
-/* 
-   A single directory entry.
-   I miss my home
-*/
-struct dir_entry 
-  {
-    block_sector_t inode_sector;        /* Sector number of header. */
-    char name[NAME_MAX + 1];            /* Null terminated file name. */
-    bool in_use;                        /* In use or free? */
-  };
 
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
 bool
-dir_create (block_sector_t sector, size_t entry_cnt)
+root_dir_create (block_sector_t sector, size_t entry_cnt)
 {
   return inode_create (sector, entry_cnt * sizeof (struct dir_entry), 1);
+}
+
+/* 
+  reimplementation of dir_create 
+  Input: name of the directory
+  Output:
+    - create new directory in the current working process directory
+    - adding new directory's entry to the current process directory data
+*/
+
+bool dir_create(const char *name)
+{
+  /* Found a new inode */
+  block_sector_t inode_sector = 0;
+  struct dir *parent_dir = thread_current()->work_dir;
+  ASSERT(parent_dir != NULL);
+  bool success = (parent_dir != NULL
+                  && free_map_allocate (1, &inode_sector) /* Allocate new sector */
+                  && inode_create (inode_sector, 0, 0)    /* Create inode at the sector */
+                  && dir_add (thread_current()->work_dir, name, inode_sector));    /* Add this directory to the working directory */
+  if (!success && inode_sector != 0) 
+  {
+    free_map_release (inode_sector, 1);
+    return success;
+  }
+  /* Open the newly created dir */
+  struct dir *dir = dir_open(inode_open(inode_sector));
+  /* Add . and .. to the directory */
+  success = success && dir_add(dir, ".", inode_sector);
+  success = success && dir_add(dir, "..", parent_dir->inode->sector);
+  return success;
 }
 
 /* Opens and returns the directory for the given INODE, of which

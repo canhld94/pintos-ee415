@@ -19,6 +19,7 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
+#include "filesys/directory.h"
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -279,7 +280,19 @@ thread_create (const char *name, int priority,
     t->ofile[i].mmap_start = NULL;
     t->ofile[i].mmap_end = NULL;
   }
-    /* Add to run queue. */
+  /* Init the thread directory */
+  if(t == idle_thread || t == initial_thread)
+  {
+    t->cur_dir = dir_open_root();
+  }
+  else
+  {
+    t->cur_dir = thread_current()->cur_dir;
+  }
+  /* default working directory is current directory */
+  t->work_dir = t->cur_dir; 
+
+  /* Add to run queue. */
   thread_unblock (t);
   return tid;
 }

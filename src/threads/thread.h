@@ -15,6 +15,7 @@
 #include <filesys/filesys.h>
 #include <threads/synch.h>
 #include "filesys/file.h"
+#include "filesys/directory.h"
 
 /* Debug  */
 #if(DEBUG > 3)
@@ -160,6 +161,10 @@ struct thread
 
     /* Used in Project 3 - VM */
     struct page_mgm *page_mgm;
+
+    /* Used in Project 4 - VM */
+    struct dir *cur_dir;                /* Process current directory */
+    struct dir *work_dir;               /* Directory that process works on */
 #endif
 
     /* Owned by thread.c. */
