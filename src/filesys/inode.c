@@ -13,33 +13,10 @@
 #define INODE_MAGIC 0x494e4f44
 
 /* Inode index block parametter */
-#define DIRECT_BLOCK 12
 #define SECTORS_PER_BLOCK  (BLOCK_SECTOR_SIZE / 4)
 #define DIRECT_LIMIT    (DIRECT_BLOCK * BLOCK_SECTOR_SIZE)  /* 6KB */
 #define IDIRECT_LIMIT   (DIRECT_LIMIT + BLOCK_SECTOR_SIZE * SECTORS_PER_BLOCK)  /* 70KB */
 #define DIDIRECT_LIMIT  (IDIRECT_LIMIT + BLOCK_SECTOR_SIZE * SECTORS_PER_BLOCK * SECTORS_PER_BLOCK) /* 8262KB */
-
-/* On-disk inode.
-   Must be exactly BLOCK_SECTOR_SIZE bytes long. */
-/*
-  TODO: expand the inode disk structure to support extensible file
-        use index blocks:
-        block_sector_t direct_block[12]
-        block_sector_t doubly_indirect_block;
-        Each doubly indirect block can hold 512/4 = 128 sectors
-        --> total file size 512*128 = 64 KB
-*/
-struct inode_disk
-{
-  // block_sector_t start;                               /* First data sector */
-  block_sector_t dblock[DIRECT_BLOCK];                /* Direct data sector. */
-  block_sector_t iblock;                              /* Inditect block */
-  block_sector_t diblock;                             /* Duobly indirect block */
-  off_t length;                                       /* File size in bytes. */
-  uint32_t flags;                                     /* Flags */
-  unsigned magic;                                     /* Magic number. */
-  uint32_t unused[111];                               /* Not used. */
-};
 
 /* Returns the number of sectors to allocate for an inode SIZE
    bytes long. */
@@ -51,22 +28,6 @@ bytes_to_sectors (off_t size)
 {
   return DIV_ROUND_UP (size, BLOCK_SECTOR_SIZE);
 }
-
-/* In-memory inode. */
-/*
-  TODO: Adding inode lock
-        Inode lock --> read lock and write lock
-*/
-struct inode 
-{
-  struct list_elem elem;              /* Element in inode list. */
-  block_sector_t sector;              /* Sector number of disk location. */
-  int open_cnt;                       /* Number of openers. */
-  bool removed;                       /* True if deleted, false otherwise. */
-  int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
-  struct _rw_lock rw;
-  struct inode_disk data;             /* Inode content. */
-};
 
 /* Returns the block device sector that contains byte offset POS
    within INODE.
@@ -348,12 +309,12 @@ void map_sector_to_inode(block_sector_t *sectors_idx,
     {
       if(index == sectors) break;
       free_map_allocate(1, &(*diblock_i)[i]);
-      // printf("dii %d\n", (*diblock_i)[i]);
+      // printf("%d: dii %d\n", i, (*diblock_i)[i]);
       (*diblock)[i] = calloc(1,BLOCK_SECTOR_SIZE);
       for(j = 0; j < SECTORS_PER_BLOCK; j++)
       {
         (*diblock)[i][j] = sectors_idx[index++];
-        // printf("di %d\n", (*diblock)[i][j]);
+        // printf("%d: di %d\n", j, (*diblock)[i][j]);
         if(index == sectors) break;
       }
     }
@@ -437,7 +398,7 @@ void sectors_release(struct inode_disk *disk_inode)
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
 bool
-inode_create (block_sector_t sector, off_t length)
+inode_create (block_sector_t sector, off_t length, uint32_t isdir)
 {
   struct inode_disk *disk_inode = NULL;
   bool success = false;
@@ -453,6 +414,7 @@ inode_create (block_sector_t sector, off_t length)
     size_t sectors = bytes_to_sectors (length);
     disk_inode->length = length;
     disk_inode->magic = INODE_MAGIC;
+    disk_inode->flags =  isdir;
     // if(sectors == 0) goto re;
     DBG_MSG_FS("[FS - %s] create new inode with len = %d\n", thread_name(), sectors);
     block_sector_t *sectors_idx = malloc(sectors * sizeof(block_sector_t));
@@ -477,7 +439,7 @@ inode_create (block_sector_t sector, off_t length)
     /* Write the indirect block */
     if(iblock != NULL)
     {
-      DBG_MSG_FS("[FS - %s] writing new indirect block\n", thread_name());
+      DBG_MSG_FS("[FS - %s] writing new indirect block %d\n", thread_name(), disk_inode->iblock);
       // for (i = 0; i < SECTORS_PER_BLOCK; i++)
       // {
       //     DBG_MSG_FS("%d ", iblock[i]);
@@ -488,7 +450,7 @@ inode_create (block_sector_t sector, off_t length)
     }
     if(diblock != NULL)
     {
-      DBG_MSG_FS("[FS - %s] writing new doubly indirect block\n", thread_name());
+      DBG_MSG_FS("[FS - %s] writing new doubly indirect block %d\n", thread_name(), disk_inode->diblock);
       cached_write(disk_inode->diblock, diblock_i, 0, BLOCK_SECTOR_SIZE);
       uint32_t i;
       for(i = 0; i < SECTORS_PER_BLOCK; i++)
@@ -583,11 +545,11 @@ inode_get_inumber (const struct inode *inode)
 void
 inode_close (struct inode *inode) 
 {
-  cached_write (inode->sector, &inode->data, 0, BLOCK_SECTOR_SIZE);
-  disk_cache_flush_all();
   /* Ignore null pointer. */
   if (inode == NULL)
     return;
+  cached_write (inode->sector, &inode->data, 0, BLOCK_SECTOR_SIZE);
+  disk_cache_flush_all();
   /* Release resources if this was the last opener. */
   if (--inode->open_cnt == 0)
     {
@@ -618,18 +580,16 @@ inode_remove (struct inode *inode)
    than SIZE if an error occurs or end of file is reached. */
 /*
   Read file --> read the inode --> locate the disk block --> o to the disk block
-
 */
 off_t
 inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset) 
 {
   uint8_t *buffer = buffer_;
   off_t bytes_read = 0;
+  ASSERT(offset <= inode_length(inode));
   rwlock_acquire_read_lock(&inode->rw);
   while (size > 0) 
   {
-    /* Disk sector to read, starting byte offset within sector. */
-    block_sector_t sector_idx = byte_to_sector (inode, offset);
     int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
     /* Bytes left in inode, bytes left in sector, lesser of the two. */
@@ -641,10 +601,12 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
     int chunk_size = size < min_left ? size : min_left;
     if (chunk_size <= 0)
       break;
-
-    DBG_MSG_FS("[FS - %s] read sector %d size %d\n", thread_name(), sector_idx, size);
+    /* Disk sector to read, starting byte offset within sector. */
+    block_sector_t sector_idx = byte_to_sector (inode, offset);
+    DBG_MSG_FS("[FS - %s] read sector %d size %d, byte left %d\n", thread_name(), sector_idx, chunk_size, inode_left);
     cached_read(sector_idx, buffer + bytes_read, sector_ofs, chunk_size);
-    
+    DBG_MSG_FS("[FS - %s] read sector %d size %d OK!\n", thread_name(), sector_idx, chunk_size, inode_left);
+
     /* Advance. */
     size -= chunk_size;
     offset += chunk_size;

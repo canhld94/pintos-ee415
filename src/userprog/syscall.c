@@ -17,6 +17,7 @@
 #include <userprog/process.h>
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "filesys/directory.h"
 #include "userprog/pagedir.h"
 #include "vm/page.h"
 #include "vm/frame.h"
@@ -36,6 +37,11 @@ static void seek (int fd, unsigned position);
 static unsigned tell (int fd);
 static void close (int fd);
 static mmapid_t mmap(int fd, uint8_t *vaddr);
+static bool chdir(const char *dir);
+static bool mkdir(const char *dir);
+static bool readdir(int id, char *dir);
+static bool isdir(int fd);
+static int inumber(int fd); 
 
 #define TO_ARG(ESP, X) (*(int *)(ESP + 4*X))
 
@@ -47,8 +53,7 @@ syscall_init (void)
 
 void exit (int status)
 {
-  DBG_MSG_USERPROG("[%s] calls exit\n", thread_name());
-  // PANIC("CP");
+  DBG_MSG_FS("[%s] calls exit\n", thread_name());
   char thread_full_name[128];
   strlcpy(thread_full_name, thread_name(), 128);
   char *process_name, *save_prt;
@@ -117,10 +122,25 @@ syscall_handler (struct intr_frame *f)
       close(arg0);
       break;
     case SYS_MMAP:
-      ret_val = mmap(arg0, arg1);
+      ret_val = mmap(arg0, arg1);    /* Map a file to a specific mem address */
       break;
-    case SYS_MUNMAP:
+    case SYS_MUNMAP:                 /* Unmap a mapped file */
       munmap(arg0);
+      break;
+    case SYS_CHDIR:                  /* Change curent directory of the process to dir  */
+      ret_val = chdir(arg0);
+      break;
+    case SYS_MKDIR:                  /* Make a new directory named dir */ 
+      ret_val = mkdir(arg0);
+      break;
+    case SYS_READDIR:                /* Read an directory entries */
+      ret_val = readdir(arg0, arg1);
+      break;
+    case SYS_ISDIR:
+      ret_val = isdir(arg0);         /* Return true if fd is directory, false otherwise*/
+      break;
+    case SYS_INUMBER:
+      ret_val = inumber(arg0);       /* Return the inode number of fd */
       break;
     default:
       break;
@@ -197,7 +217,7 @@ static int open (const char *file)
     }
   }
   if(tmp == NULL) return -1;  /* If failed, return -1 */
-  DBG_MSG_USERPROG("[%s] filesys_open %s success\n", thread_name(), file);
+  DBG_MSG_FS("[%s] filesys_open %s success\n", thread_name(), file);
   /* If success find the first index that ofile[index] = NULL
      and return index + 2 */
   int i = 0;
@@ -429,4 +449,36 @@ static bool is_valid_mmap_vaddr(void *vaddr)
     return false;
   /* Pass all */
   return true;
+}
+
+static bool chdir(const char *dir)
+{
+
+}
+
+static bool mkdir(const char *dir)
+{
+  /*
+  Implementation:
+  If the string start with / --> absolute path --> chdir to root
+  Else --> relative path --> keep process dir
+  Tokenize the input string with '/'
+  If the first word is '..' --> chdir to parrent dir --> how to know the parrent dir
+  
+  */
+}
+
+static bool readdir(int id, char *dir)
+{
+  
+}
+
+static bool isdir(int fd)
+{
+
+}
+
+static int inumber(int fd)
+{
+
 }

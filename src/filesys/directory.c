@@ -13,7 +13,10 @@ struct dir
     off_t pos;                          /* Current position. */
   };
 
-/* A single directory entry. */
+/* 
+   A single directory entry.
+   I miss my home
+*/
 struct dir_entry 
   {
     block_sector_t inode_sector;        /* Sector number of header. */
@@ -26,7 +29,7 @@ struct dir_entry
 bool
 dir_create (block_sector_t sector, size_t entry_cnt)
 {
-  return inode_create (sector, entry_cnt * sizeof (struct dir_entry));
+  return inode_create (sector, entry_cnt * sizeof (struct dir_entry), 1);
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -37,6 +40,7 @@ dir_open (struct inode *inode)
   struct dir *dir = calloc (1, sizeof *dir);
   if (inode != NULL && dir != NULL)
     {
+      ASSERT(inode->data.flags);
       dir->inode = inode;
       dir->pos = 0;
       return dir;
@@ -100,14 +104,17 @@ lookup (const struct dir *dir, const char *name,
 
   for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e) 
+  {
     if (e.in_use && !strcmp (name, e.name)) 
-      {
-        if (ep != NULL)
-          *ep = e;
-        if (ofsp != NULL)
-          *ofsp = ofs;
-        return true;
-      }
+    {
+      // printf("found file\n");
+      if (ep != NULL)
+        *ep = e;
+      if (ofsp != NULL)
+        *ofsp = ofs;
+      return true;
+    }
+  }
   return false;
 }
 
