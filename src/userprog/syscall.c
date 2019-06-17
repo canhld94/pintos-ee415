@@ -495,7 +495,7 @@ static bool mkdir(const char *dir)
   Tokenize the input string with '/'
   If the first word is '..' --> chdir to parrent dir --> how to know the parrent dir
   */
- if(dir == NULL || !dir)
+ if(dir == NULL || !*dir)
   return false;
  return dir_create(dir);
 }
