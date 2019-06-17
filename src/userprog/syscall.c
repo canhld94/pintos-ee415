@@ -194,7 +194,7 @@ static bool create (const char *file, unsigned initial_size)
 static bool remove (const char *file)
 {
   DBG_MSG_USERPROG("[%s] calls remove %s\n", thread_name(), file);
-  if(file == NULL)
+  if(file == NULL || !*file || !strcmp(file, "/"))
   {
     exit(-1);
   }
