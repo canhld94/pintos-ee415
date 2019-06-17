@@ -12,7 +12,12 @@
 bool
 root_dir_create (block_sector_t sector, size_t entry_cnt)
 {
-  return inode_create (sector, entry_cnt * sizeof (struct dir_entry), 1);
+  bool success = inode_create (sector, entry_cnt * sizeof (struct dir_entry), 1);
+  struct dir *rootdir = dir_open(inode_open(sector));
+  success = success && dir_add(rootdir, ".", sector);  /* This directory */ 
+  success = success && dir_add(rootdir, "..",sector); /* Parrent directory */
+  dir_close(rootdir);
+  return success;
 }
 
 /* 
@@ -25,31 +30,107 @@ root_dir_create (block_sector_t sector, size_t entry_cnt)
 
 bool dir_create(const char *name)
 {
+ char new_dir[128]; // an copy of dir
+ strlcpy(new_dir, name, 128);
+ struct dir *workdir;
+ struct inode *inode;
+ bool success = true;
+ if(new_dir[0] == '/') /* Absolute path, need to go to root directory */
+ {
+   workdir = dir_open_root();
+ }
+ else
+ {
+   workdir = dir_reopen(thread_current()->cur_dir);
+ }
+ /* Tokenize the string */
+  int cnt = 0; /* number of argv, at least 1 */
+  char *token, *save_ptr;
+  char *hier[16]; // we allow maximum 16 level in the hierachy 
+   for (token = strtok_r (new_dir, "/", &save_ptr); token != NULL;
+        token = strtok_r (NULL, "/", &save_ptr))
+        {
+          hier[cnt] = token;
+          cnt++;
+        }
+  /* Move to desired working directory */
+  int i = 0;
+  for(i = 0; i < cnt - 1; i++)
+  {
+    /* Looking for the desired directory, or create if it's not exist */
+    success = dir_lookup(workdir, hier[i], &inode);
+    if(!success)
+      return success;
+    dir_close(workdir);
+    workdir = dir_open(inode);
+  }
+  /* Create new dir here */
   /* Found a new inode */
   block_sector_t inode_sector = 0;
-  struct dir *parent_dir = thread_current()->work_dir;
-  ASSERT(parent_dir != NULL);
-  bool success = (parent_dir != NULL
+  ASSERT(workdir != NULL);
+  success = success && (workdir != NULL
                   && free_map_allocate (1, &inode_sector) /* Allocate new sector */
-                  && inode_create (inode_sector, 0, 0)    /* Create inode at the sector */
-                  && dir_add (thread_current()->work_dir, name, inode_sector));    /* Add this directory to the working directory */
+                  && inode_create (inode_sector, 0, 1)    /* Create inode at the sector */
+                  && dir_add (workdir, hier[i], inode_sector));    /* Add this directory to the working directory */
   if (!success && inode_sector != 0) 
   {
     free_map_release (inode_sector, 1);
     return success;
   }
+  /* Close work dir */
+  dir_close(workdir);
   /* Open the newly created dir */
-  struct dir *dir = dir_open(inode_open(inode_sector));
+  struct dir *newdir = dir_open(inode_open(inode_sector));
   /* Add . and .. to the directory */
-  success = success && dir_add(dir, ".", inode_sector);
-  success = success && dir_add(dir, "..", parent_dir->inode->sector);
+  success = success && dir_add(newdir, ".", inode_sector);  /* This directory */ 
+  success = success && dir_add(newdir, "..", workdir->inode->sector); /* Parrent directory */
+  dir_close(newdir);
   return success;
+}
+
+struct dir *open_dir(const char *name)
+{
+ char new_dir[128]; // an copy of dir
+ strlcpy(new_dir, name, 128);
+ struct dir *workdir;
+ struct inode *inode;
+ bool success = true;
+ if(new_dir[0] == '/') /* Absolute path, need to go to root directory */
+ {
+   workdir = dir_open_root();
+ }
+ else
+ {
+   workdir = dir_reopen(thread_current()->cur_dir);
+ }
+ /* Tokenize the string */
+  int cnt = 0; /* number of argv, at least 1 */
+  char *token, *save_ptr;
+  char *hier[16]; // we allow maximum 16 level in the hierachy 
+   for (token = strtok_r (new_dir, "/", &save_ptr); token != NULL;
+        token = strtok_r (NULL, "/", &save_ptr))
+        {
+          hier[cnt] = token;
+          cnt++;
+        }
+  /* Move to desired working directory */
+  int i = 0;
+  for(i = 0; i < cnt; i++)
+  {
+    /* Looking for the desired directory, or create if it's not exist */
+    success = dir_lookup(workdir, hier[i], &inode);
+    if(!success)
+      return NULL;
+    dir_close(workdir);
+    workdir = dir_open(inode);
+  }
+  ASSERT(workdir != NULL);
+  return workdir;
 }
 
 /* Opens and returns the directory for the given INODE, of which
    it takes ownership.  Returns a null pointer on failure. */
-struct dir *
-dir_open (struct inode *inode) 
+struct dir *dir_open (struct inode *inode) 
 {
   struct dir *dir = calloc (1, sizeof *dir);
   if (inode != NULL && dir != NULL)
@@ -80,6 +161,7 @@ dir_open_root (void)
 struct dir *
 dir_reopen (struct dir *dir) 
 {
+  ASSERT(dir != NULL);
   return dir_open (inode_reopen (dir->inode));
 }
 
@@ -115,7 +197,7 @@ lookup (const struct dir *dir, const char *name,
   
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
-
+  // printf("%d\n", dir->inode->sector);
   for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e) 
   {
@@ -144,6 +226,7 @@ dir_lookup (const struct dir *dir, const char *name,
 
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
+    // printf("%d\n", dir->inode->sector);
 
   if (lookup (dir, name, &e, NULL))
     *inode = inode_open (e.inode_sector);
@@ -153,6 +236,22 @@ dir_lookup (const struct dir *dir, const char *name,
   return *inode != NULL;
 }
 
+/*
+  Search dir for an entry with name, if the entry exist return
+  If not then create the entry
+*/
+
+// bool 
+// dir_lookup_and_create(struct dir *dir, const char *name, struct inode **inode)
+// {
+//   bool success = dir_lookup(dir, name, inode);
+//   if(!success) /* Need to create new dir */
+//   {
+//     success = dir_create(dir, name);
+//     success = success && dir_lookup(dir, name, inode);
+//   } 
+//   return success;
+// }
 /* Adds a file named NAME to DIR, which must not already contain a
    file by that name.  The file's inode is in sector
    INODE_SECTOR.
@@ -184,10 +283,13 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
      inode_read_at() will only return a short read at end of file.
      Otherwise, we'd need to verify that we didn't get a short
      read due to something intermittent such as low memory. */
-  for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
-       ofs += sizeof e) 
+  for (ofs = 0; ofs <= inode_length(dir->inode); ofs += sizeof e) 
+  {
+    // printf("%d: %d full\n", inode_sector, ofs);
+    inode_read_at (dir->inode, &e, sizeof e, ofs);
     if (!e.in_use)
       break;
+  }
 
   /* Write slot. */
   e.in_use = true;

@@ -23,6 +23,7 @@
 #include "vm/frame.h"
 #include "round.h"
 
+
 static void syscall_handler (struct intr_frame *);
 static void halt (void) NO_RETURN;
 static pid_t exec (const char *file);
@@ -42,6 +43,8 @@ static bool mkdir(const char *dir);
 static bool readdir(int id, char *dir);
 static bool isdir(int fd);
 static int inumber(int fd); 
+/* File helper */
+static void file_parse(char *file);
 
 #define TO_ARG(ESP, X) (*(int *)(ESP + 4*X))
 
@@ -183,7 +186,7 @@ static bool create (const char *file, unsigned initial_size)
   {
     return 0;
   }
-  /* Otherwise, just create */
+  /* Create new dir here */
   return filesys_create(file, initial_size);
 }
 
@@ -453,7 +456,19 @@ static bool is_valid_mmap_vaddr(void *vaddr)
 
 static bool chdir(const char *dir)
 {
+   /*
+  Implementation:
+  If the string start with / --> absolute path --> chdir to root
+  Else --> relative path --> keep process dir
+  Tokenize the input string with '/'
+  If the first word is '..' --> chdir to parrent dir --> how to know the parrent dir
 
+ */
+  struct dir *newdir = open_dir(dir);
+  if(dir == NULL) return false;
+  dir_close(thread_current()->cur_dir);
+  thread_current()->cur_dir = newdir;
+  return true;
 }
 
 static bool mkdir(const char *dir)
@@ -464,21 +479,11 @@ static bool mkdir(const char *dir)
   Else --> relative path --> keep process dir
   Tokenize the input string with '/'
   If the first word is '..' --> chdir to parrent dir --> how to know the parrent dir
-
   */
- if(dir == NULL || !*dir) // NULL pointer or empty string 
- {
-   return false;
- }
- if(dir[0] == '/') /* Absolute path, need to go to root directory */
- {
-
- }
- /* Tokenize the string */
- 
+ return dir_create(dir);
 }
 
-static bool readdir(int id, char *dir)
+static bool readdir(int fd, char *dir)
 {
   
 }

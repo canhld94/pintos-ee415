@@ -416,7 +416,7 @@ inode_create (block_sector_t sector, off_t length, uint32_t isdir)
     disk_inode->magic = INODE_MAGIC;
     disk_inode->flags =  isdir;
     // if(sectors == 0) goto re;
-    DBG_MSG_FS("[FS - %s] create new inode with len = %d\n", thread_name(), sectors);
+    DBG_MSG_FS("[FS - %s] create new inode at %d with len = %d\n", thread_name(), sector, length);
     block_sector_t *sectors_idx = malloc(sectors * sizeof(block_sector_t));
     // ASSERT(sectors_idx != NULL);
     block_sector_t *iblock = NULL;

@@ -39,6 +39,8 @@
 #include "filesys/filesys.h"
 #include "filesys/fsutil.h"
 #include "filesys/cache.h"
+#include "filesys/directory.h"
+#include "filesys/inode.h"
 #endif
 
 /* Page directory with kernel mappings only. */
@@ -157,6 +159,11 @@ main (void)
   locate_block_devices ();
   disk_cache_init();
   filesys_init (format_filesys);
+  /* Setting init thread directory */
+  thread_current()->cur_dir = dir_open_root();
+  ASSERT(thread_current()->cur_dir != NULL);
+  thread_current()->workdir = thread_current()->cur_dir;
+
 #endif
 
 #ifdef USERPROG

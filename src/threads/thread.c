@@ -277,21 +277,16 @@ thread_create (const char *name, int priority,
   {
     t->ofile[i].file = NULL;
     t->ofile[i].mfile = NULL;
+    t->ofile[i].dir = NULL;
     t->ofile[i].mmap_start = NULL;
     t->ofile[i].mmap_end = NULL;
   }
-  /* Init the thread directory */
-  if(t == idle_thread || t == initial_thread)
+    /* Init the thread directory */
+  if(thread_current()->cur_dir != NULL)
   {
-    t->cur_dir = dir_open_root();
+    t->cur_dir = dir_reopen(thread_current()->cur_dir);
+    t->workdir = t->cur_dir;
   }
-  else
-  {
-    t->cur_dir = thread_current()->cur_dir;
-  }
-  /* default working directory is current directory */
-  t->work_dir = t->cur_dir; 
-
   /* Add to run queue. */
   thread_unblock (t);
   return tid;

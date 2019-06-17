@@ -7,7 +7,7 @@
 #define THREADS_THREAD_H
 #define USERPROG
 #define DEBUG 0
-#define NOFILE 256
+#define NOFILE 128
 #include <debug.h>
 #include <list.h>
 #include "hash.h"
@@ -67,8 +67,10 @@ struct openning_file
 {
   struct file *file;
   struct file *mfile;
+  struct dir *dir;
   uint8_t *mmap_start;
   uint8_t *mmap_end;
+
 };
 
 /* Page management */
@@ -164,7 +166,7 @@ struct thread
 
     /* Used in Project 4 - VM */
     struct dir *cur_dir;                /* Process current directory */
-    struct dir *work_dir;               /* Directory that process works on */
+    struct dir *workdir;               /* Directory that process works on */
 #endif
 
     /* Owned by thread.c. */

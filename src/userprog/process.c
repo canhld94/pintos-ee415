@@ -193,7 +193,13 @@ process_exit (void)
     {
       munmap(i + 2);
     }
+    if(cur->ofile[i].dir != NULL)
+    {
+      dir_close(cur->ofile[i].dir);
+    }
   }
+  dir_close(cur->cur_dir);
+
   lock_acquire(&frame.lock);
   lock_acquire(&swap.lock);
   /* Free the swap table */
