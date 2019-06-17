@@ -18,8 +18,8 @@ struct inode;
 /* A directory. */
 struct dir 
 {
-    struct dir *parent;                 /* parrent of this directory */
     struct inode *inode;                /* Backing store. */
+    struct dir *parent;                 /* parrent of this directory */
     off_t pos;                          /* Current position. */
 };
 

@@ -111,6 +111,7 @@ filesys_open (const char *name)
  if(new_file[0] == '/') /* Absolute path, need to go to root directory */
  {
    workdir = dir_open_root();
+   if(new_file[1] == 0) return workdir;
  }
  else
  {
@@ -169,6 +170,11 @@ filesys_remove (const char *name)
  if(new_file[0] == '/') /* Absolute path, need to go to root directory */
  {
    workdir = dir_open_root();
+   if(new_file[1] == 0)
+   {
+     dir_close(workdir);
+     return false;
+   }
  }
  else
  {

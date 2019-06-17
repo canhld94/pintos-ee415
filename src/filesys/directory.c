@@ -12,7 +12,7 @@
 bool
 root_dir_create (block_sector_t sector, size_t entry_cnt)
 {
-  bool success = inode_create (sector, entry_cnt * sizeof (struct dir_entry), 1);
+  bool success = inode_create (sector, 0, 1);
   struct dir *rootdir = dir_open(inode_open(sector));
   success = success && dir_add(rootdir, ".", sector);  /* This directory */ 
   success = success && dir_add(rootdir, "..",sector); /* Parrent directory */
@@ -77,13 +77,13 @@ bool dir_create(const char *name)
     free_map_release (inode_sector, 1);
     return success;
   }
-  /* Close work dir */
-  dir_close(workdir);
   /* Open the newly created dir */
   struct dir *newdir = dir_open(inode_open(inode_sector));
   /* Add . and .. to the directory */
   success = success && dir_add(newdir, ".", inode_sector);  /* This directory */ 
   success = success && dir_add(newdir, "..", workdir->inode->sector); /* Parrent directory */
+  /* Close work dir */
+  dir_close(workdir);
   dir_close(newdir);
   return success;
 }
@@ -183,6 +183,25 @@ struct inode *
 dir_get_inode (struct dir *dir) 
 {
   return dir->inode;
+}
+
+static bool
+dir_isempty(const struct dir *dir) 
+{
+  struct dir_entry e;
+  size_t ofs;
+  
+  ASSERT (dir != NULL);
+  // printf("%d\n", dir->inode->sector);
+  for (ofs = 40; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e; ofs += sizeof e) 
+  {
+    if (e.in_use) 
+    {
+      // printf("%s\n", e.name);
+      return false;
+    }
+  }
+  return true;
 }
 
 /* Searches DIR for a file with the given NAME.
@@ -319,12 +338,23 @@ dir_remove (struct dir *dir, const char *name)
   /* Find directory entry. */
   if (!lookup (dir, name, &e, &ofs))
     goto done;
-
+  if(e.inode_sector == ROOT_DIR_SECTOR 
+    || e.inode_sector == thread_current()->cur_dir->inode->sector)
+    goto done;
   /* Open inode. */
   inode = inode_open (e.inode_sector);
-  if (inode == NULL)
+  if (inode == NULL || inode->open_cnt > 1)
     goto done;
-
+  /* Check if it's dir and dir entry > 0 */
+  if(inode->data.flags)
+  {
+    struct dir *thisdir = dir_open(inode);
+    if(!dir_isempty(thisdir))
+    {
+      dir_close(thisdir);
+      return false;
+    }
+  }
   /* Erase directory entry. */
   e.in_use = false;
   if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e) 
@@ -347,13 +377,14 @@ bool
 dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 {
   struct dir_entry e;
-
+  if(dir->pos < 40) dir->pos = 40;
   while (inode_read_at (dir->inode, &e, sizeof e, dir->pos) == sizeof e) 
     {
       dir->pos += sizeof e;
       if (e.in_use)
         {
           strlcpy (name, e.name, NAME_MAX + 1);
+          // printf("%s\n", e.name);
           return true;
         } 
     }

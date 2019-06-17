@@ -57,6 +57,7 @@ syscall_init (void)
 
 void exit (int status)
 {
+  // PANIC("DBG");
   DBG_MSG_FS("[%s] calls exit\n", thread_name());
   char thread_full_name[128];
   strlcpy(thread_full_name, thread_name(), 128);
@@ -194,7 +195,7 @@ static bool create (const char *file, unsigned initial_size)
 static bool remove (const char *file)
 {
   DBG_MSG_USERPROG("[%s] calls remove %s\n", thread_name(), file);
-  if(file == NULL || !*file || !strcmp(file, "/"))
+  if(file == NULL || !*file)
   {
     exit(-1);
   }
@@ -225,7 +226,7 @@ static int open (const char *file)
   /* If success find the first index that ofile[index] = NULL
      and return index + 2 */
   int i = 0;
-  while(i < NOFILE && thread_current()->ofile[i].file != NULL)
+  while(i < NOFILE && (thread_current()->ofile[i].file != NULL || thread_current()->ofile[i].dir != NULL))
   {
     i++;
   }
@@ -238,8 +239,7 @@ static int open (const char *file)
   {
       thread_current()->ofile[i].file = tmp;
   }
-  
-  DBG_MSG_USERPROG("[%s] open %s return %d\n", thread_name(), file, i + 2);
+  // printf("[%s] open %s return %d\n", thread_name(), file, i + 2);
   return i + 2; 
 }
 
@@ -501,9 +501,9 @@ static bool mkdir(const char *dir)
  return dir_create(dir);
 }
 
-static bool readdir(int fd, char *dir)
+static bool readdir(int fd, char *name)
 {
-  
+  return dir_readdir(thread_current()->ofile[fd - 2].dir, name);
 }
 
 static bool isdir(int fd)
