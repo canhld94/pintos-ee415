@@ -72,12 +72,15 @@ bool dir_create(const char *name)
                   && free_map_allocate (1, &inode_sector) /* Allocate new sector */
                   && inode_create (inode_sector, 0, 1)    /* Create inode at the sector */
                   && dir_add (workdir, hier[i], inode_sector));    /* Add this directory to the working directory */
-  if (!success && inode_sector != 0) 
+  if (!success) 
   {
-    free_map_release (inode_sector, 1);
+    if(inode_sector != 0)
+      free_map_release (inode_sector, 1);
+    dir_close(workdir);
     return success;
   }
   /* Open the newly created dir */
+  // printf("%d\n", inode_sector);
   struct dir *newdir = dir_open(inode_open(inode_sector));
   /* Add . and .. to the directory */
   success = success && dir_add(newdir, ".", inode_sector);  /* This directory */ 
@@ -343,16 +346,17 @@ dir_remove (struct dir *dir, const char *name)
     goto done;
   /* Open inode. */
   inode = inode_open (e.inode_sector);
-  if (inode == NULL || inode->open_cnt > 1)
+  if (inode == NULL || (inode->data.flags && inode->open_cnt > 1))
     goto done;
   /* Check if it's dir and dir entry > 0 */
+
   if(inode->data.flags)
   {
     struct dir *thisdir = dir_open(inode);
     if(!dir_isempty(thisdir))
     {
       dir_close(thisdir);
-      return false;
+      return success;
     }
   }
   /* Erase directory entry. */

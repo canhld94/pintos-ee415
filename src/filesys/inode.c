@@ -491,6 +491,7 @@ inode_create (block_sector_t sector, off_t length, uint32_t isdir)
 struct inode *
 inode_open (block_sector_t sector)
 {
+  // printf("open %d\n", sector);
   struct list_elem *e;
   struct inode *inode;
 
@@ -520,6 +521,7 @@ inode_open (block_sector_t sector)
   rwlock_init(&inode->rw);
   lock_init(&inode->lock);
   cached_read (inode->sector, &inode->data, 0, BLOCK_SECTOR_SIZE);
+  // printf("open %d %d\n", sector, inode->open_cnt);
   return inode;
 }
 
@@ -531,6 +533,7 @@ inode_reopen (struct inode *inode)
   if (inode != NULL)
     inode->open_cnt++;
   lock_release(&inode->lock);
+  // printf("reopen %d %d\n", inode->sector, inode->open_cnt);
   return inode;
 }
 
@@ -551,11 +554,16 @@ inode_close (struct inode *inode)
   /* Ignore null pointer. */
   if (inode == NULL)
     return;
+  // printf("close %d\n", inode->sector);
   cached_write (inode->sector, &inode->data, 0, BLOCK_SECTOR_SIZE);
-  disk_cache_flush_all();
+  // disk_cache_flush_all();
   /* Release resources if this was the last opener. */
-  // lock_acquire(&inode->lock);
-  if (--inode->open_cnt == 0)
+  lock_acquire(&inode->lock);
+  inode->open_cnt--;
+  lock_release(&inode->lock);
+  // printf("close %d %d\n", inode->sector, inode->open_cnt);
+  disk_cache_flush_all();
+  if (inode->open_cnt == 0)
     {
       /* Remove from inode list and release lock. */
       list_remove (&inode->elem);
