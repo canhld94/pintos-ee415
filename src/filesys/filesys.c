@@ -144,8 +144,14 @@ filesys_open (const char *name)
   success = success && dir_lookup (workdir, hier[i], &file_inode);
   if(!success) return NULL;
   dir_close (workdir);
-
-  return file_open (file_inode);
+  if(file_inode->data.flags)  /* Is directory */
+  {
+    return dir_open(file_inode);
+  }
+  else
+  {
+    return file_open (file_inode);    
+  }
 }
 
 /* Deletes the file named NAME.
@@ -155,10 +161,45 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name) 
 {
-  struct dir *dir = dir_open_root ();
-  bool success = dir != NULL && dir_remove (dir, name);
-  dir_close (dir); 
-
+ char new_file[128]; // an copy of dir
+ strlcpy(new_file, name, 128);
+ struct dir *workdir;
+ struct inode *inode;
+ bool success = true;
+ if(new_file[0] == '/') /* Absolute path, need to go to root directory */
+ {
+   workdir = dir_open_root();
+ }
+ else
+ {
+   workdir = dir_reopen(thread_current()->cur_dir);
+   ASSERT(workdir != NULL);
+ }
+ /* Tokenize the string */
+  int cnt = 0; /* number of argv, at least 1 */
+  char *token, *save_ptr;
+  char *hier[16]; // we allow maximum 16 level in the hierachy 
+   for (token = strtok_r (new_file, "/", &save_ptr); token != NULL;
+        token = strtok_r (NULL, "/", &save_ptr))
+        {
+          // printf("%s\n", token);
+          hier[cnt] = token;
+          cnt++;
+        }
+  /* Move to desired working directory */
+  int i = 0;
+  for(i = 0; i < cnt - 1; i++)
+  {
+    /* Looking for the desired directory, or create if it's not exist */
+    success = dir_lookup(workdir, hier[i], &inode);
+    dir_close(workdir);
+    if(!success)
+      return success;
+    workdir = dir_open(inode);
+  }
+  ASSERT(workdir != NULL);
+  success = success && workdir != NULL && dir_remove (workdir, hier[i]);
+  dir_close (workdir); 
   return success;
 }
 

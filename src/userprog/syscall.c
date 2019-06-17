@@ -18,6 +18,7 @@
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "filesys/directory.h"
+#include "filesys/inode.h"
 #include "userprog/pagedir.h"
 #include "vm/page.h"
 #include "vm/frame.h"
@@ -229,7 +230,15 @@ static int open (const char *file)
     i++;
   }
   if(i == NOFILE) return -1; /* excess number of opened file */
-  thread_current()->ofile[i].file = tmp;
+  if(tmp->inode->data.flags)
+  {
+      thread_current()->ofile[i].dir = tmp;
+  }
+  else
+  {
+      thread_current()->ofile[i].file = tmp;
+  }
+  
   DBG_MSG_USERPROG("[%s] open %s return %d\n", thread_name(), file, i + 2);
   return i + 2; 
 }
@@ -348,10 +357,16 @@ static void close (int fd)
       exit(-1);
     default:
       DBG_MSG_USERPROG("[%s] calls close to %d\n", thread_name(), fd);
-      if(thread_current()->ofile[fd - 2].file == NULL) /* Didn't open */
-        return -1;
-      file_close(thread_current()->ofile[fd - 2].file);
-      thread_current()->ofile[fd - 2].file = NULL;
+      if(thread_current()->ofile[fd - 2].file != NULL) /* Didn't open */
+      {
+        file_close(thread_current()->ofile[fd - 2].file);
+        thread_current()->ofile[fd - 2].file = NULL;
+      }
+      if(thread_current()->ofile[fd - 2].dir != NULL) /* Didn't open */
+      {
+        dir_close(thread_current()->ofile[fd - 2].dir);
+        thread_current()->ofile[fd - 2].dir = NULL;
+      }
       break;
   }
 }
@@ -480,6 +495,8 @@ static bool mkdir(const char *dir)
   Tokenize the input string with '/'
   If the first word is '..' --> chdir to parrent dir --> how to know the parrent dir
   */
+ if(dir == NULL || !dir)
+  return false;
  return dir_create(dir);
 }
 
@@ -490,10 +507,13 @@ static bool readdir(int fd, char *dir)
 
 static bool isdir(int fd)
 {
-
+  return (thread_current()->ofile[fd - 2].dir != NULL);
 }
 
 static int inumber(int fd)
 {
-
+  if(thread_current()->ofile[fd - 2].dir != NULL)
+    return thread_current()->ofile[fd - 2].dir->inode->sector;
+  if(thread_current()->ofile[fd - 2].file != NULL)
+    return thread_current()->ofile[fd - 2].file->inode->sector;
 }

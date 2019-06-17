@@ -119,12 +119,14 @@ struct dir *open_dir(const char *name)
   {
     /* Looking for the desired directory, or create if it's not exist */
     success = dir_lookup(workdir, hier[i], &inode);
-    if(!success)
-      return NULL;
     dir_close(workdir);
+    if(!success)
+    {
+      return NULL;
+    }
     workdir = dir_open(inode);
   }
-  ASSERT(workdir != NULL);
+  // ASSERT(workdir != NULL);
   return workdir;
 }
 
@@ -203,7 +205,6 @@ lookup (const struct dir *dir, const char *name,
   {
     if (e.in_use && !strcmp (name, e.name)) 
     {
-      // printf("found file\n");
       if (ep != NULL)
         *ep = e;
       if (ofsp != NULL)
@@ -232,7 +233,7 @@ dir_lookup (const struct dir *dir, const char *name,
     *inode = inode_open (e.inode_sector);
   else
     *inode = NULL;
-
+  // printf("%d %d\n", dir->inode->sector, (*inode)->sector);
   return *inode != NULL;
 }
 
@@ -330,6 +331,7 @@ dir_remove (struct dir *dir, const char *name)
     goto done;
 
   /* Remove inode. */
+  // printf("%d\n", inode->sector);
   inode_remove (inode);
   success = true;
 
