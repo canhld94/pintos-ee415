@@ -5,7 +5,7 @@
 #include "filesys/off_t.h"
 #include "devices/block.h"
 #include "filesys/cache.h"
-
+#include "threads/synch.h"
 struct bitmap;
 
 /* Inode index parametter */
@@ -46,6 +46,7 @@ struct inode
   int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
   struct _rw_lock rw;
   struct inode_disk data;             /* Inode content. */
+  struct lock lock;
 };
 
 

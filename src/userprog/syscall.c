@@ -480,7 +480,8 @@ static bool chdir(const char *dir)
 
  */
   struct dir *newdir = open_dir(dir);
-  if(dir == NULL) return false;
+  // printf("%d\n", newdir->inode->sector);
+  if(newdir == NULL) return false;
   dir_close(thread_current()->cur_dir);
   thread_current()->cur_dir = newdir;
   return true;
