@@ -8,13 +8,11 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Duc Canh Le <canhld@kaist.ac.kr>
 
 >> Fill in your GitLab repository address.
 
-https://gitlab.com/yourid/example
+https://github.com/canhld94/pintos-ee415
 
 ---- PRELIMINARIES ----
 
@@ -33,22 +31,61 @@ https://gitlab.com/yourid/example
 >> A1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+New inode disk struct with indexed block
+struct inode_disk
+{
+  block_sector_t dblock[DIRECT_BLOCK];                /* Direct data sector. */
+  block_sector_t iblock;                              /* Inditect block */
+  block_sector_t diblock;                             /* Duobly indirect block */
+  off_t length;                                       /* File size in bytes. */
+  uint32_t flags;                                     /* Flags */
+  unsigned magic;                                     /* Magic number. */
+  uint32_t unused[111];                               /* Not used. */
+};
+
+Adding read-write lock to inode
+struct inode 
+{
+  struct list_elem elem;              /* Element in inode list. */
+  block_sector_t sector;              /* Sector number of disk location. */
+  int open_cnt;                       /* Number of openers. */
+  bool removed;                       /* True if deleted, false otherwise. */
+  int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
+  struct _rw_lock rw;
+  struct inode_disk data;             /* Inode content. */
+};
+
+Read write lock
+struct _rw_lock
+{
+  struct lock lock;           /* General lock */
+  struct lock write_lock;     /* Write lock */
+  uint32_t reader;            /* number of reader in lock */
+};
+
 
 >> A2: What is the maximum size of a file supported by your inode
 >> structure?  Show your work.
+512x12 + 512/4x512 + 512/4x512/4x512 = 8262 KB
 
 ---- SYNCHRONIZATION ----
 
 >> A3: Explain how your code avoids a race if two processes attempt to
 >> extend a file at the same time.
-
+The inode is protected by read/write lock. The read lock allow multiple 
+processes read that inode at the same time but the write lock is exclusive 
+lock, therefore only one process with write lock can modify the inode at 
+a time
 >> A4: Suppose processes A and B both have file F open, both
 >> positioned at end-of-file.  If A reads and B writes F at the same
 >> time, A may read all, part, or none of what B writes.  However, A
 >> may not read data other than what B writes, e.g. if B writes
 >> nonzero data, A is not allowed to see all zeros.  Explain how your
 >> code avoids this race.
-
+In the read/write lock, the first reader must accquire write lock. Therefore, 
+if A want to read an inode, A must prevent any write to inode, or must wait if 
+there is another process writing to the inode. I.e. either A read none of B write 
+or A read all of B write, so A cannot read data other than B writes.
 >> A5: Explain how your synchronization design provides "fairness".
 >> File access is "fair" if readers cannot indefinitely block writers
 >> or vice versa.  That is, many processes reading from a file cannot
@@ -63,7 +100,11 @@ https://gitlab.com/yourid/example
 >> indirect blocks?  If not, why did you choose an alternative inode
 >> structure, and what advantages and disadvantages does your
 >> structure have, compared to a multilevel index?
-
+Yes. We use 12 direct blocks, 1 indirect block and 1 doubly indirect block. We 
+use this combination in the manner that most of file will falls in direct 
+blocks and indirect block, that reduce the disk access to look up the block. 
+The doubly indirect block is neccessary to support large file (up to 8262KB,
+e.g. larger than file system capacity)
 			    SUBDIRECTORIES
 			    ==============
 
@@ -103,12 +144,42 @@ https://gitlab.com/yourid/example
 >> C1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+RW lock, use in page cache and inode
+struct _rw_lock
+{
+  struct lock lock;           <!-- General lock -->
+  struct lock write_lock;     <!-- Write lock -->
+  uint32_t reader;            <!-- number of reader in lock -->
+};
+
+A block sector in disk cache 
+struct _block_sector 
+{
+    struct list_elem elem;  <!-- List element for block sector in list -->
+    block_sector_t sector;  <!-- Corresponding sector on disk -->
+    uint32_t ref_count;     <!-- Number of process are refering to this block -->
+    uint32_t flags;         <!-- Flags -->
+    uint8_t *data;          <!-- Data of the sector -->
+    struct lock lock;       <!-- Accessed lock -->
+    struct _rw_lock rw;     <!-- r/w lock -->
+};
+
+The buffer cache object
+struct _disk_cache
+{
+    struct list sector_list;      <!-- The list for cache -->
+    struct lock lock;       <!-- Global lock for the cache -->
+    uint32_t size;          <!-- Size of the cache in sector -->
+};
 
 ---- ALGORITHMS ----
 
 >> C2: Describe how your cache replacement algorithm chooses a cache
 >> block to evict.
-
+We use second chance algorthim: The clock hand start at 0, if we need to 
+evict a page, we first check the page at the clock hand. If the reference bit 
+is 0, we evict this page. Otherwise we set the page to 1 and advance the clock hand. 
+The process is repeated untill we found a non-refered page. 
 >> C3: Describe your implementation of write-behind.
 Create a specific thread for write behind and schedule it every, say, 
 5 seconds. This thread will scan the buffer and write all dirty blocks
