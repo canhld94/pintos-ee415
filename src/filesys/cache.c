@@ -278,7 +278,6 @@ static void block_sector_load(struct _block_sector *b)
     ASSERT(!block_sector_is_dirty(b));
     while (ref_count_get(b) > 0) 
     {
-        printf("load yield()\n");
         thread_yield();
     }
     ref_count_incr(b);
@@ -294,7 +293,6 @@ static void block_sector_flush(struct _block_sector *b, bool evict)
     // ASSERT(block_sector_is_accessed(b));
     while (ref_count_get(b) > 0) 
     {
-        printf("fflush yield()\n");
         thread_yield();
     }
     // ref_count_incr(b);

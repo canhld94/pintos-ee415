@@ -106,6 +106,7 @@ filesys_open (const char *name)
 
  char new_file[128]; // an copy of dir
  strlcpy(new_file, name, 128);
+//  printf("open %s\n", new_file);
  struct dir *workdir;
  struct inode *inode;
  bool success = true;
@@ -126,16 +127,18 @@ filesys_open (const char *name)
    for (token = strtok_r (new_file, "/", &save_ptr); token != NULL;
         token = strtok_r (NULL, "/", &save_ptr))
         {
-          // printf("%s\n", token);
+          // printf("%s/", token);
           hier[cnt] = token;
           cnt++;
         }
+    // printf("\n");
   /* Move to desired working directory */
   int i = 0;
   for(i = 0; i < cnt - 1; i++)
   {
     /* Looking for the desired directory, or create if it's not exist */
     success = dir_lookup(workdir, hier[i], &inode);
+    // printf("%s %d\n", hier[i], inode->sector);
     if(!success)
       return NULL;
     dir_close(workdir);

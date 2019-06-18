@@ -113,12 +113,22 @@ e.g. larger than file system capacity)
 >> B1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+Directory structure
+struct dir 
+{
+    struct inode *inode;                /* Backing store. */
+    struct dir *parent;                 /* parrent of this directory */
+    off_t pos;                          /* Current position. */
+};
 
 ---- ALGORITHMS ----
 
 >> B2: Describe your code for traversing a user-specified path.  How
 >> do traversals of absolute and relative paths differ?
-
+Firstly we check the path to see it's absolute path or relative path. Absolute path 
+start with '/' and we need to open the working directory at root directory. For 
+relative path, we open the working directory at process current directory. Then we 
+tokenize the path with '/' and then 
 ---- SYNCHRONIZATION ----
 
 >> B4: How do you prevent races on directory entries?  For example,
@@ -182,7 +192,7 @@ is 0, we evict this page. Otherwise we set the page to 1 and advance the clock h
 The process is repeated untill we found a non-refered page. 
 >> C3: Describe your implementation of write-behind.
 Create a specific thread for write behind and schedule it every, say, 
-5 seconds. This thread will scan the buffer and write all dirty blocks
+100 ticks. This thread will scan the buffer and write all dirty blocks
 to filesystem.
 >> C4: Describe your implementation of read-ahead.
 Similarly, there is a specific thread for read ahead. When a process finishes
@@ -193,14 +203,34 @@ blocks to the page cache
 >> C5: When one process is actively reading or writing data in a
 >> buffer cache block, how are other processes prevented from evicting
 >> that block?
+Each page has its own reference counter. Each read/write to this page first 
+increase the ref. count and decrease it when read/write is done. While running the 
+clock algorithm, if the target page has reference counter > 0, we don't evict this page but search for other block. 
 
 >> C6: During the eviction of a block from the cache, how are other
 >> processes prevented from attempting to access the block?
-
+Assume that we need to evict the block N to load new block M. Then in the worst case
+we need to write the contents of block N to disk and load the block M. We use an
+exclusive lock in each page to protect its metadata (which is different from read/
+write lock to protect the actual data). During evicting the page (say, caching
+block N), we must acquire the exclusive lock of the page. Therefore, other process
+cannot access the metadata of this page and therefore, it cannot found that block N 
+is caching in the page and therefore, we can safety write the content of N to 
+disk. 
 ---- RATIONALE ----
 
 >> C7: Describe a file workload likely to benefit from buffer caching,
 >> and workloads likely to benefit from read-ahead and write-behind.
+The buffer cache may be useful when:
+1. Working with a lot of files in the same directory: Then we must access the 
+directory's data block many times for searching its contents.
+2. Working on update a large file: Then we must access the inode of this file very 
+frequently to update the metadata and searching for the data block.
+
+The read-ahead is most benefit when we access many consecutive block, e.g. updating 
+a very large file sequentially.
+The write behind is most benefit when we make a lot of small update on a block, i.e.
+update the inode metadata, then many update is batched to single update.
 
 			   SURVEY QUESTIONS
 			   ================

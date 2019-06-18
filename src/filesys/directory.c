@@ -16,6 +16,7 @@ root_dir_create (block_sector_t sector, size_t entry_cnt)
   struct dir *rootdir = dir_open(inode_open(sector));
   success = success && dir_add(rootdir, ".", sector);  /* This directory */ 
   success = success && dir_add(rootdir, "..",sector); /* Parrent directory */
+  // printf("%d\n", rootdir->pos);
   dir_close(rootdir);
   return success;
 }
@@ -114,6 +115,7 @@ struct dir *open_dir(const char *name)
         token = strtok_r (NULL, "/", &save_ptr))
         {
           hier[cnt] = token;
+          // printf("%d: %s\n", cnt, token);
           cnt++;
         }
   /* Move to desired working directory */
@@ -221,7 +223,7 @@ lookup (const struct dir *dir, const char *name,
   
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
-  // printf("%d\n", dir->inode->sector);
+  // printf("looking up %d for %s\n", dir->inode->sector, name);
   for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e) 
   {
@@ -249,13 +251,11 @@ dir_lookup (const struct dir *dir, const char *name,
 
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
-    // printf("%d\n", dir->inode->sector);
 
   if (lookup (dir, name, &e, NULL))
     *inode = inode_open (e.inode_sector);
   else
     *inode = NULL;
-  // printf("%d %d\n", dir->inode->sector, (*inode)->sector);
   return *inode != NULL;
 }
 
@@ -306,12 +306,14 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
      inode_read_at() will only return a short read at end of file.
      Otherwise, we'd need to verify that we didn't get a short
      read due to something intermittent such as low memory. */
-  for (ofs = 0; ofs <= inode_length(dir->inode); ofs += sizeof e) 
+  // printf("adding %s to %d at ", name, dir->inode->sector);
+  for (ofs = 0; ofs < inode_length(dir->inode); ofs += sizeof e) 
   {
-    // printf("%d: %d full\n", inode_sector, ofs);
     inode_read_at (dir->inode, &e, sizeof e, ofs);
     if (!e.in_use)
+    {
       break;
+    }
   }
 
   /* Write slot. */
@@ -319,6 +321,7 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
   strlcpy (e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
+  // printf("new inode len: %d\n",inode_length(dir->inode));
 
  done:
   return success;
@@ -365,7 +368,6 @@ dir_remove (struct dir *dir, const char *name)
     goto done;
 
   /* Remove inode. */
-  // printf("%d\n", inode->sector);
   inode_remove (inode);
   success = true;
 
@@ -381,14 +383,13 @@ bool
 dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 {
   struct dir_entry e;
-  if(dir->pos < 40) dir->pos = 40;
+  if(dir->pos <= 40) dir->pos = 40;
   while (inode_read_at (dir->inode, &e, sizeof e, dir->pos) == sizeof e) 
     {
       dir->pos += sizeof e;
       if (e.in_use)
         {
           strlcpy (name, e.name, NAME_MAX + 1);
-          // printf("%s\n", e.name);
           return true;
         } 
     }

@@ -562,7 +562,7 @@ inode_close (struct inode *inode)
   inode->open_cnt--;
   lock_release(&inode->lock);
   // printf("close %d %d\n", inode->sector, inode->open_cnt);
-  disk_cache_flush_all();
+  // disk_cache_flush_all();
   if (inode->open_cnt == 0)
     {
       /* Remove from inode list and release lock. */
@@ -576,6 +576,7 @@ inode_close (struct inode *inode)
         }
       free (inode); 
     }
+  disk_cache_flush_all();
 }
 
 /* Marks INODE to be deleted when it is closed by the last caller who
