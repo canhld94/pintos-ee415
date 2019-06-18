@@ -1,8 +1,8 @@
        	       	     +-------------------------+
        	       	     |	   EE 415 / PD 511     |
-		     | PROJECT 4: FILE SYSTEMS |
-		     |	   DESIGN DOCUMENT     |
-		     +-------------------------+
+                     | PROJECT 4: FILE SYSTEMS |
+                     |	   DESIGN DOCUMENT     |
+                     +-------------------------+
 
 ---- GROUP ----
 
@@ -18,6 +18,7 @@ https://github.com/canhld94/pintos-ee415
 
 >> If you have any preliminary comments on your submission, notes for the
 >> TAs, or extra credit, please give them here.
+
 
 >> Please cite any offline or online sources you consulted while
 >> preparing your submission, other than the Pintos documentation, course
@@ -85,13 +86,15 @@ a time
 In the read/write lock, the first reader must accquire write lock. Therefore, 
 if A want to read an inode, A must prevent any write to inode, or must wait if 
 there is another process writing to the inode. I.e. either A read none of B write 
-or A read all of B write, so A cannot read data other than B writes.
+or A read all of B write, so A cannot read any data of B writes.
 >> A5: Explain how your synchronization design provides "fairness".
 >> File access is "fair" if readers cannot indefinitely block writers
 >> or vice versa.  That is, many processes reading from a file cannot
 >> prevent forever another process from writing the file, and many
 >> processes writing to a file cannot prevent another process forever
 >> from reading the file.
+We use a simple r/w lock while read is shared lock and write is exlusive lock, therefore
+we cannot guarantee the fairness.
 
 ---- RATIONALE ----
 
@@ -105,6 +108,7 @@ use this combination in the manner that most of file will falls in direct
 blocks and indirect block, that reduce the disk access to look up the block. 
 The doubly indirect block is neccessary to support large file (up to 8262KB,
 e.g. larger than file system capacity)
+
 			    SUBDIRECTORIES
 			    ==============
 
@@ -116,9 +120,10 @@ e.g. larger than file system capacity)
 Directory structure
 struct dir 
 {
-    struct inode *inode;                /* Backing store. */
-    struct dir *parent;                 /* parrent of this directory */
-    off_t pos;                          /* Current position. */
+    struct inode *inode;                 <!--   Backing store.  -->
+    struct dir *parent;                  <!-- parrent of this directory --> 
+    off_t pos;                           <!-- Current position. --> 
+    struct lock lock;                    <!-- Lock -->
 };
 
 ---- ALGORITHMS ----
@@ -128,23 +133,34 @@ struct dir
 Firstly we check the path to see it's absolute path or relative path. Absolute path 
 start with '/' and we need to open the working directory at root directory. For 
 relative path, we open the working directory at process current directory. Then we 
-tokenize the path with '/' and then 
+tokenize the path with '/' and then open each directory in the path recusevily.
+
 ---- SYNCHRONIZATION ----
 
 >> B4: How do you prevent races on directory entries?  For example,
 >> only one of two simultaneous attempts to remove a single file
 >> should succeed, as should only one of two simultaneous attempts to
 >> create a file with the same name, and so on.
+We treat operator that modify directory as mutual exlusive sections. Therefore,
+only one process can modify the directory at a time.
 
 >> B5: Does your implementation allow a directory to be removed if it
 >> is open by a process or if it is in use as a process's current
 >> working directory?  If so, what happens to that process's future
 >> file system operations?  If not, how do you prevent it?
-
+We don't allow it. Before removing a directory, we check it inode open 
+counter. If this counter is > 1 (i.e it's openned in somewhere else 
+other than in remove function), then we don't allow this directory to be 
+removed. 
 ---- RATIONALE ----
 
 >> B6: Explain why you chose to represent the current directory of a
 >> process the way you did.
+We represent the current directory of the process by a pointer to this directory
+with the manner a directory is always openned when a process run under it. We can 
+also represent it by a string of path. However, when process run, it will need to 
+access its directory several times. So it's more reasonable if we can always open 
+the process directory and close it when the process exit.  
 
 			     BUFFER CACHE
 			     ============
@@ -205,7 +221,8 @@ blocks to the page cache
 >> that block?
 Each page has its own reference counter. Each read/write to this page first 
 increase the ref. count and decrease it when read/write is done. While running the 
-clock algorithm, if the target page has reference counter > 0, we don't evict this page but search for other block. 
+clock algorithm, if the target page has reference counter > 0, we don't evict this page 
+but search for other block. 
 
 >> C6: During the eviction of a block from the cache, how are other
 >> processes prevented from attempting to access the block?
